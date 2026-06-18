@@ -90,7 +90,7 @@ function ProgressRing({ done, total }) {
   )
 }
 
-export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, onToggle, onBail, onRPE, onNote }) {
+export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, user, onToggle, onBail, onRPE, onNote }) {
   const [openWeeks, setOpenWeeks] = useState(() => new Set([plan[0]?.num]))
 
   function toggleWeek(num) {
@@ -255,7 +255,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                               />
                             )}
 
-                            {matchedActivity && <ActivityDetail activity={matchedActivity} />}
+                            {matchedActivity && <ActivityDetail activity={matchedActivity} session={session} ftp={user?.ftp} maxHr={user?.max_hr} />}
                           </div>
                         </div>
                       </div>
