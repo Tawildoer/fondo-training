@@ -21,11 +21,15 @@ create table users (
   riding_strength text,          -- climber, sprinter, time_trialist, all_rounder
   weekly_hours_start int,
   days_per_week int,
+  -- Plan anchoring (fixed start so the plan progresses through real time)
+  plan_start_date date,
   -- Meta
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
   constraint users_auth_id_key unique (auth_id)
 );
+-- Migration for existing databases (safe to re-run):
+--   alter table users add column if not exists plan_start_date date;
 
 -- 2. Session state (checkbox + RPE + notes per session per user)
 create table session_state (

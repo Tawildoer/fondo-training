@@ -4,8 +4,53 @@ import { getTodaySessions } from '../lib/schedule'
 const PHASE_COLORS = { base: '#378ADD', build: '#639922', 'race-prep': '#534AB7', taper: '#EF9F27', recovery: '#888780' }
 const CHART_H = 150
 
-function TodayCard({ plan, sessionState, onToggle, onBail }) {
-  const todays = getTodaySessions(plan)
+function CatchUpCard({ unconfirmed, onToggle, onBail }) {
+  if (!unconfirmed?.length) return null
+  return (
+    <div className="card" style={{ borderLeft: '3px solid var(--color-accent)' }}>
+      <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <i className="ti ti-clock-question" aria-hidden="true" /> Catch up
+      </h2>
+      <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: -4, marginBottom: 12 }}>
+        Log these so your plan can adapt — did you do them?
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {unconfirmed.map(({ session, weekNum, idx, date }) => (
+          <div key={`${weekNum}_${idx}`} className={`sess-${session.zone}`} style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.6 }}>
+                {date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+              </span>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{session.name}</span>
+            </div>
+            <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85, marginBottom: 10 }}>{session.desc}</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary btn-sm" onClick={() => onToggle(weekNum, idx, session.zone)}>
+                <i className="ti ti-check" aria-hidden="true" /> Did it
+              </button>
+              <button className="btn btn-sm" onClick={() => onBail(weekNum, idx, session.zone)} style={{ color: 'var(--color-red-text)' }}>
+                <i className="ti ti-circle-x" aria-hidden="true" /> Missed it
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function AdaptationBanner({ adaptation }) {
+  if (!adaptation) return null
+  return (
+    <div className={`adaptive-banner ${adaptation.tone}`} style={{ marginBottom: '1.5rem' }}>
+      <i className={`ti ${adaptation.icon}`} aria-hidden="true" />
+      <span>{adaptation.msg}</span>
+    </div>
+  )
+}
+
+function TodayCard({ plan, sessionState, planStart, onToggle, onBail }) {
+  const todays = getTodaySessions(plan, planStart)
   const dateLabel = new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
 
   if (!todays.length) return null
@@ -215,12 +260,14 @@ function StravaCard({ strava }) {
   )
 }
 
-export default function Overview({ user, plan, sessionState = {}, onToggle, onBail, doneSessions, totalSessions, daysLeft, strava }) {
+export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, onToggle, onBail, doneSessions, totalSessions, daysLeft, strava }) {
   const pct = totalSessions ? Math.round((doneSessions / totalSessions) * 100) : 0
 
   return (
     <div>
-      <TodayCard plan={plan} sessionState={sessionState} onToggle={onToggle} onBail={onBail} />
+      <CatchUpCard unconfirmed={unconfirmed} onToggle={onToggle} onBail={onBail} />
+      <AdaptationBanner adaptation={adaptation} />
+      <TodayCard plan={plan} sessionState={sessionState} planStart={planStart} onToggle={onToggle} onBail={onBail} />
       <StravaCard strava={strava} />
 
       <div className="stats-grid">

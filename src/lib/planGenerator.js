@@ -2,6 +2,8 @@
 // Builds a personalised plan from a user profile.
 // Zones are calculated from FTP; descriptions adapt to event type.
 
+import { getPlanStart } from './schedule'
+
 export const ZONE_DEFINITIONS = [
   { z: 'Z1', name: 'Recovery',   factors: [0.00, 0.55] },
   { z: 'Z2', name: 'Endurance',  factors: [0.56, 0.75] },
@@ -223,7 +225,9 @@ export function generatePlan(profile) {
   const phases = buildPhases(weeks)
   const volumeRamp = buildVolumeRamp(weeks, weekly_hours_start, days_per_week)
 
-  const startDate = new Date()
+  // Anchor to the user's fixed plan start (today if unset) so the plan
+  // progresses through real time instead of re-anchoring on every load.
+  const startDate = getPlanStart(profile)
   const plan = []
   let globalWeek = 0
 
@@ -268,23 +272,110 @@ function getRecoverySessions(ftp) {
   ]
 }
 
-// Adaptive coaching logic based on recent RPE
-export function getAdaptation(weekNum, sessionState) {
-  const recentRPEs = []
-  for (let w = Math.max(1, weekNum - 2); w < weekNum; w++) {
-    Object.entries(sessionState).forEach(([key, val]) => {
-      if (key.startsWith(`w${w}_`) && val.rpe && val.zone && val.zone !== 'rest') {
-        const isIntense = ['z3', 'z4', 'z5'].includes(val.zone)
-        if (isIntense) recentRPEs.push(val.rpe)
+// ── Adaptive coaching ────────────────────────────────────────
+// Balances three confirmed signals over the recently-elapsed weeks:
+// explicit bails (missed), completions, and RPE of hard sessions.
+// Unconfirmed (pending) past sessions are never counted — a "miss"
+// only ever comes from an explicit bail. The returned directive drives
+// both the coaching banner and the upcoming-week adjustments.
+
+const ZONE_ORDER = ['z1', 'z2', 'z3', 'z4', 'z5']
+const INTENSE = ['z3', 'z4', 'z5']
+
+export function computeAdaptation(plan, sessionState, currentWeek) {
+  const from = Math.max(1, currentWeek - 2)
+  const to = currentWeek - 1
+  if (to < from) return null
+
+  let completed = 0
+  let bailed = 0
+  const hardRPEs = []
+  plan.forEach(week => {
+    if (week.num < from || week.num > to) return
+    week.sessions.forEach((s, i) => {
+      if (s.zone === 'rest') return
+      const st = sessionState[`w${week.num}_${i}`] || {}
+      if (st.bailed) bailed++
+      else if (st.completed) {
+        completed++
+        if (INTENSE.includes(s.zone) && st.rpe) hardRPEs.push(st.rpe)
       }
     })
-  }
-  if (!recentRPEs.length) return null
-  const avg = recentRPEs.reduce((a, b) => a + b, 0) / recentRPEs.length
+  })
 
-  if (avg >= 4.5) return { tone: 'warning', icon: 'ti-alert-triangle', msg: 'Your recent hard sessions are rating very high. Back off slightly — hit the interval count but don\'t chase extra watts. Adaptation happens in recovery.' }
-  if (avg >= 3.8) return { tone: 'push', icon: 'ti-flame', msg: 'Sessions are feeling tough. That\'s normal at this phase. Prioritise quality reps over grinding through all of them fatigued.' }
-  if (avg <= 1.8) return { tone: 'go', icon: 'ti-trending-up', msg: 'Recent sessions felt easy — fitness is building. Try nudging intensity: add 5W to targets or extend the last interval by 2–3 min.' }
-  if (avg <= 2.5) return { tone: 'good', icon: 'ti-check', msg: 'Training is landing well. Stay disciplined with the plan — this is where adaptation compounds.' }
-  return { tone: 'hold', icon: 'ti-target', msg: 'Load is landing right. Hit the prescribed targets and trust the process.' }
+  const confirmed = completed + bailed
+  if (confirmed === 0) return null
+  const missRate = bailed / confirmed
+  const avgHardRPE = hardRPEs.length ? hardRPEs.reduce((a, b) => a + b, 0) / hardRPEs.length : null
+
+  if (bailed >= 2 || missRate >= 0.4) {
+    return { tone: 'warning', icon: 'ti-heart-handshake', factor: 0.85, intensity: 'soften',
+      reason: 'eased after missed sessions',
+      msg: `You've missed ${bailed} session${bailed === 1 ? '' : 's'} recently — easing the next block so you can get back on track. Consistency beats heroics.` }
+  }
+  if (avgHardRPE !== null && avgHardRPE >= 4.5) {
+    return { tone: 'warning', icon: 'ti-alert-triangle', factor: 0.9, intensity: 'soften',
+      reason: 'eased after very hard ratings',
+      msg: 'Your hard sessions are rating very high. Backing off the next block slightly — adaptation happens in recovery, not by grinding through fatigue.' }
+  }
+  if (avgHardRPE !== null && avgHardRPE >= 3.8) {
+    return { tone: 'push', icon: 'ti-flame', factor: 1, intensity: 'none',
+      msg: 'Sessions are feeling tough — normal for this phase. Prioritise quality reps over grinding through all of them fatigued.' }
+  }
+  if (completed >= 3 && avgHardRPE !== null && avgHardRPE <= 1.8) {
+    return { tone: 'go', icon: 'ti-trending-up', factor: 1.05, intensity: 'raise',
+      reason: 'progressed — sessions felt easy',
+      msg: "You're nailing your sessions and they're coming easy — stepping things up. Expect a touch more load and intensity ahead." }
+  }
+  if (avgHardRPE !== null && avgHardRPE <= 2.5) {
+    return { tone: 'good', icon: 'ti-check', factor: 1, intensity: 'none',
+      msg: 'Training is landing well. Stay disciplined with the plan — this is where adaptation compounds.' }
+  }
+  return { tone: 'hold', icon: 'ti-target', factor: 1, intensity: 'none',
+    msg: 'Load is landing right. Hit the prescribed targets and trust the process.' }
+}
+
+// Index of the single hardest (highest-zone, z3+) session in a week, or -1.
+function hardestIdx(sessions) {
+  let bestIdx = -1
+  let bestRank = ZONE_ORDER.indexOf('z3') - 1
+  sessions.forEach((s, i) => {
+    const rank = ZONE_ORDER.indexOf(s.zone)
+    if (s.zone !== 'rest' && rank > bestRank) { bestRank = rank; bestIdx = i }
+  })
+  return bestIdx
+}
+
+function softenHardest(sessions) {
+  const i = hardestIdx(sessions)
+  if (i < 0) return sessions
+  const s = sessions[i]
+  const lower = ZONE_ORDER[Math.max(0, ZONE_ORDER.indexOf(s.zone) - 1)]
+  const copy = sessions.slice()
+  copy[i] = { ...s, zone: lower, name: `${s.name} (eased)`, desc: `Eased back this week — hold the lower zone and don't chase the original target. ${s.desc}` }
+  return copy
+}
+
+function raiseHardest(sessions) {
+  const i = hardestIdx(sessions)
+  if (i < 0) return sessions
+  const s = sessions[i]
+  const copy = sessions.slice()
+  copy[i] = { ...s, name: `${s.name} (progressed)`, desc: `Progressed — add ~5W to the target or one extra interval. ${s.desc}` }
+  return copy
+}
+
+// Returns a new plan with upcoming weeks (num > currentWeek) adjusted per the
+// adaptation directive. Deterministic — recompute from sessionState each render.
+export function applyAdaptation(plan, adaptation, currentWeek) {
+  if (!adaptation || (adaptation.factor === 1 && adaptation.intensity === 'none')) return plan
+  return plan.map(week => {
+    if (week.num <= currentWeek) return week
+    const hrs = adaptation.factor !== 1 ? Math.round(week.hrs * adaptation.factor * 2) / 2 : week.hrs
+    let sessions = week.sessions
+    if (adaptation.intensity === 'soften') sessions = softenHardest(week.sessions)
+    else if (adaptation.intensity === 'raise') sessions = raiseHardest(week.sessions)
+    if (hrs === week.hrs && sessions === week.sessions) return week
+    return { ...week, hrs, sessions, adjusted: true, adjustReason: adaptation.reason }
+  })
 }

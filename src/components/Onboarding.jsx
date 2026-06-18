@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createUser } from '../lib/supabase'
+import { localDateStr } from '../lib/schedule'
 
 const EVENT_TYPES = [
   { value: 'gran_fondo', label: 'Gran Fondo', icon: 'ti-mountain' },
@@ -79,6 +80,7 @@ export default function Onboarding({ authUser, onComplete }) {
         riding_strength: form.riding_strength || 'all_rounder',
         weekly_hours_start: parseFloat(form.weekly_hours_start) || 6,
         days_per_week: parseInt(form.days_per_week) || 5,
+        plan_start_date: localDateStr(new Date()),
       }
       const newUser = await createUser(profile)
       onComplete(newUser)

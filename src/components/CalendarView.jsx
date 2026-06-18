@@ -9,9 +9,9 @@ const ZONE_COLORS = {
   z5: { bg: 'var(--color-red-light)',    text: 'var(--color-red-text)',    label: 'HIIT / VO₂ max' },
 }
 
-function buildSessionsByDate(plan, sessionState) {
+function buildSessionsByDate(plan, sessionState, base) {
   const map = {}
-  getScheduledSessions(plan).forEach(({ session, date, weekNum, idx }) => {
+  getScheduledSessions(plan, { base }).forEach(({ session, date, weekNum, idx }) => {
     const key = date.toISOString().slice(0, 10)
     if (!map[key]) map[key] = []
     map[key].push({
@@ -24,13 +24,13 @@ function buildSessionsByDate(plan, sessionState) {
   return map
 }
 
-export default function CalendarView({ plan, sessionState, eventName }) {
+export default function CalendarView({ plan, sessionState, planStart, eventName }) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const [tooltip, setTooltip] = useState(null) // { key, idx }
 
-  const sessionsByDate = buildSessionsByDate(plan, sessionState)
+  const sessionsByDate = buildSessionsByDate(plan, sessionState, planStart)
 
   const firstDay = new Date(viewYear, viewMonth, 1)
   const lastDay = new Date(viewYear, viewMonth + 1, 0)
@@ -64,7 +64,7 @@ export default function CalendarView({ plan, sessionState, eventName }) {
     <div>
       {/* Export */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
-        <button className="btn btn-sm" onClick={() => downloadICS(plan, eventName || 'Training Plan')}>
+        <button className="btn btn-sm" onClick={() => downloadICS(plan, eventName || 'Training Plan', planStart)}>
           <i className="ti ti-calendar-plus" aria-hidden="true" /> Add to calendar
         </button>
       </div>

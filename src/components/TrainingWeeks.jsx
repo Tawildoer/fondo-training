@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getAdaptation, RPE_LABELS } from '../lib/planGenerator'
+import { RPE_LABELS } from '../lib/planGenerator'
 import { getSessionDate } from '../lib/schedule'
 import { matchActivityToDate } from '../lib/strava'
 import ActivityDetail from './ActivityDetail'
@@ -90,7 +90,7 @@ function ProgressRing({ done, total }) {
   )
 }
 
-export default function TrainingWeeks({ plan, sessionState, activities = [], onToggle, onBail, onRPE, onNote }) {
+export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, onToggle, onBail, onRPE, onNote }) {
   const [openWeeks, setOpenWeeks] = useState(() => new Set([plan[0]?.num]))
 
   function toggleWeek(num) {
@@ -112,7 +112,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], onT
           sessionState[`w${week.num}_${i}`]?.completed
         ).length
         const isOpen = openWeeks.has(week.num)
-        const adaptation = isOpen ? getAdaptation(week.num, sessionState) : null
+        const weekAdaptation = (isOpen && adaptation && week.num >= currentWeek) ? adaptation : null
         const phaseTag = week.isRecovery ? 'recovery' : week.phase
 
         return (
@@ -133,6 +133,12 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], onT
                   <span className={`tag tag-${phaseTag}`}>
                     {week.isRecovery ? 'Recovery week' : week.phaseLabel}
                   </span>
+                  {week.adjusted && (
+                    <span className="tag" style={{ background: 'var(--color-accent-light)', color: 'var(--color-accent-text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                      title={week.adjustReason}>
+                      <i className="ti ti-wand" style={{ fontSize: 12 }} aria-hidden="true" /> Adjusted
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
                   {week.dateStr} · {week.hrs}h target
@@ -147,10 +153,10 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], onT
 
             {isOpen && (
               <div style={{ borderTop: '0.5px solid var(--color-border)', padding: '12px 16px 16px' }}>
-                {adaptation && (
-                  <div className={`adaptive-banner ${adaptation.tone}`} style={{ marginBottom: 12 }}>
-                    <i className={`ti ${adaptation.icon}`} aria-hidden="true" />
-                    <span>{adaptation.msg}</span>
+                {weekAdaptation && (
+                  <div className={`adaptive-banner ${weekAdaptation.tone}`} style={{ marginBottom: 12 }}>
+                    <i className={`ti ${weekAdaptation.icon}`} aria-hidden="true" />
+                    <span>{weekAdaptation.msg}</span>
                   </div>
                 )}
 
@@ -160,7 +166,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], onT
                     const state = sessionState[key] || {}
                     const isRest = session.zone === 'rest'
                     const bailed = !!state.bailed && !isRest
-                    const matchedActivity = isRest ? null : matchActivityToDate(activities, getSessionDate(week.num, session, idx))
+                    const matchedActivity = isRest ? null : matchActivityToDate(activities, getSessionDate(week.num, session, idx, planStart))
 
                     return (
                       <div key={idx} className={`sess-${session.zone}`}

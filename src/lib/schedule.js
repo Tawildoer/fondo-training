@@ -54,6 +54,51 @@ export function getTodaySessions(plan, base = new Date()) {
   )
 }
 
+// ── Plan start anchoring ─────────────────────────────────────
+// The plan is anchored to a fixed start date so it progresses through
+// real time (week 1 doesn't slide forward with "today" every load).
+
+// Local YYYY-MM-DD for a date (avoids UTC off-by-one).
+export function localDateStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Parse a stored YYYY-MM-DD as a local date (not UTC).
+export function parseLocalDate(str) {
+  if (!str) return null
+  const [y, m, d] = str.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+// The fixed start date for a user's plan, at local midnight (today if unset).
+export function getPlanStart(user) {
+  const d = parseLocalDate(user?.plan_start_date) || new Date()
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+// Which plan week the given date falls in (1-based). Caller clamps to plan length.
+export function getCurrentWeekNum(planStart, base = new Date()) {
+  const startMon = mondayOf(planStart)
+  const nowMon = mondayOf(base)
+  const weeks = Math.round((nowMon - startMon) / (7 * 24 * 60 * 60 * 1000))
+  return Math.max(1, weeks + 1)
+}
+
+// Past, non-rest sessions the user hasn't confirmed (neither completed nor
+// bailed). Drives the next-day "did you do it?" prompt — oldest first.
+export function getUnconfirmedSessions(plan, sessionState, planStart, base = new Date()) {
+  const today = new Date(base)
+  today.setHours(0, 0, 0, 0)
+  return getScheduledSessions(plan, { includeRest: false, base: planStart })
+    .filter(({ date, weekNum, idx }) => {
+      if (date.getTime() >= today.getTime()) return false
+      const st = sessionState[`w${weekNum}_${idx}`] || {}
+      return !st.completed && !st.bailed
+    })
+    .sort((a, b) => a.date - b.date)
+}
+
 // ── .ics export ──────────────────────────────────────────────
 
 function pad(n) { return String(n).padStart(2, '0') }
@@ -108,8 +153,8 @@ export function buildICS(plan, { calendarName = 'Training Plan', base = new Date
 }
 
 // Trigger a browser download of the plan as an .ics file.
-export function downloadICS(plan, calendarName = 'Training Plan') {
-  const ics = buildICS(plan, { calendarName })
+export function downloadICS(plan, calendarName = 'Training Plan', base = new Date()) {
+  const ics = buildICS(plan, { calendarName, base })
   const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

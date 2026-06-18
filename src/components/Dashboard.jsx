@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { generatePlan } from '../lib/planGenerator'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { generatePlan, computeAdaptation, applyAdaptation } from '../lib/planGenerator'
+import { getPlanStart, getCurrentWeekNum, getUnconfirmedSessions, localDateStr } from '../lib/schedule'
 import { loadSessionState, upsertSessionState, loadAdjustments, addAdjustment, deleteAdjustment, updateUser, loadFtpHistory, addFtpEntry, getStravaAccount, loadActivities } from '../lib/supabase'
 import { syncStrava, getStravaAuthUrl, stravaConfigured } from '../lib/strava'
 import TrainingWeeks from './TrainingWeeks'
@@ -29,6 +30,15 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
   useEffect(() => {
     setPlan(generatePlan(user))
   }, [user])
+
+  // Backfill a fixed plan start date for users created before anchoring existed.
+  useEffect(() => {
+    if (user?.id && !user.plan_start_date) {
+      const today = localDateStr(new Date())
+      updateUser(user.id, { plan_start_date: today })
+      onUpdateUser({ ...user, plan_start_date: today })
+    }
+  }, [user?.id, user?.plan_start_date])
 
   // Load persisted state from Supabase
   useEffect(() => {
@@ -150,7 +160,27 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     setSyncing(false)
   }
 
-  const totalSessions = plan.reduce((a, w) => a + w.sessions.filter(s => s.zone !== 'rest').length, 0)
+  // Adaptive layer — anchor the plan in real time, then adjust upcoming weeks
+  // from the confirmed recent-week signals. All derived, no extra storage.
+  const planStart = useMemo(() => getPlanStart(user), [user?.plan_start_date])
+  const currentWeek = useMemo(
+    () => Math.min(plan.length || 1, getCurrentWeekNum(planStart)),
+    [planStart, plan.length]
+  )
+  const adaptation = useMemo(
+    () => computeAdaptation(plan, sessionState, currentWeek),
+    [plan, sessionState, currentWeek]
+  )
+  const adjustedPlan = useMemo(
+    () => applyAdaptation(plan, adaptation, currentWeek),
+    [plan, adaptation, currentWeek]
+  )
+  const unconfirmed = useMemo(
+    () => getUnconfirmedSessions(adjustedPlan, sessionState, planStart),
+    [adjustedPlan, sessionState, planStart]
+  )
+
+  const totalSessions = adjustedPlan.reduce((a, w) => a + w.sessions.filter(s => s.zone !== 'rest').length, 0)
   const doneSessions = Object.values(sessionState).filter(s => s?.completed).length
 
   const TABS = [
@@ -201,13 +231,13 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
         </div>
       ) : (
         <>
-          {tab === 'overview' && <Overview user={user} plan={plan} sessionState={sessionState} onToggle={toggleSession} onBail={bailSession} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
+          {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} onToggle={toggleSession} onBail={bailSession} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
             strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }} />}
-          {tab === 'calendar' && <CalendarView plan={plan} sessionState={sessionState} eventName={user.event_name} />}
-          {tab === 'training' && <TrainingWeeks plan={plan} sessionState={sessionState} activities={activities} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} />}
-          {tab === 'guide' && <PlanGuide plan={plan} user={user} />}
+          {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={user.event_name} />}
+          {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} />}
+          {tab === 'guide' && <PlanGuide plan={adjustedPlan} user={user} />}
           {tab === 'zones' && <PowerZones user={user} onUpdateFTP={handleUpdateFTP} ftpHistory={ftpHistory} />}
-{tab === 'adjustments' && <Adjustments user={user} adjustments={adjustments} plan={plan} onAdd={handleAddAdjustment} onDelete={handleDeleteAdjustment} onUpdateFTP={handleUpdateFTP} />}
+{tab === 'adjustments' && <Adjustments user={user} adjustments={adjustments} plan={adjustedPlan} onAdd={handleAddAdjustment} onDelete={handleDeleteAdjustment} onUpdateFTP={handleUpdateFTP} />}
         </>
       )}
     </div>
