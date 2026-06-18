@@ -171,7 +171,8 @@ body {
   flex-wrap: wrap;
 }
 .tab-btn {
-  padding: 7px 16px;
+  flex: 1;
+  padding: 7px 8px;
   border-radius: 5px;
   border: none;
   background: transparent;
@@ -182,6 +183,7 @@ body {
   transition: all 0.15s;
   font-family: inherit;
   white-space: nowrap;
+  text-align: center;
 }
 .tab-btn:hover { color: var(--color-text); }
 .tab-btn.active {

@@ -1,35 +1,206 @@
-import { Bar } from 'react-chartjs-2'
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip } from 'chart.js'
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip)
+import { useState } from 'react'
+import { getTodaySessions } from '../lib/schedule'
 
 const PHASE_COLORS = { base: '#378ADD', build: '#639922', 'race-prep': '#534AB7', taper: '#EF9F27', recovery: '#888780' }
+const CHART_H = 150
 
-export default function Overview({ user, plan, doneSessions, totalSessions, daysLeft }) {
-  const weeksLeft = daysLeft ? Math.ceil(daysLeft / 7) : null
+function TodayCard({ plan, sessionState, onToggle }) {
+  const todays = getTodaySessions(plan)
+  const dateLabel = new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
+
+  if (!todays.length) return null
+
+  return (
+    <div className="card">
+      <h2>Today · {dateLabel}</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {todays.map(({ session, weekNum, idx }) => {
+          const isRest = session.zone === 'rest'
+          const state = sessionState[`w${weekNum}_${idx}`] || {}
+          return (
+            <div key={idx} className={`sess-${session.zone}`} style={{ borderRadius: 'var(--radius-sm)', padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              {!isRest && (
+                <input
+                  type="checkbox"
+                  checked={!!state.completed}
+                  onChange={() => onToggle(weekNum, idx, session.zone)}
+                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--color-accent)', marginTop: 1, flexShrink: 0 }}
+                />
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>
+                  {state.completed && !isRest
+                    ? <span style={{ textDecoration: 'line-through', opacity: 0.55 }}>{session.name}</span>
+                    : session.name}
+                </div>
+                <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{session.desc}</div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function VolumeChart({ plan }) {
+  const [hovered, setHovered] = useState(null)
+  const maxHrs = Math.max(...plan.map(w => w.hrs || 0), 1)
+  const midHrs = Math.round(maxHrs / 2)
+
+  return (
+    <div style={{ display: 'flex', gap: 0 }}>
+      {/* Y-axis labels */}
+      <div style={{ width: 28, flexShrink: 0, position: 'relative', height: CHART_H + 20 }}>
+        {[maxHrs, midHrs, 0].map(v => (
+          <div key={v} style={{
+            position: 'absolute',
+            bottom: (v / maxHrs) * CHART_H + 20,
+            right: 4,
+            fontSize: 9,
+            color: 'var(--color-text-faint)',
+            lineHeight: 1,
+            transform: 'translateY(50%)',
+          }}>
+            {v}h
+          </div>
+        ))}
+      </div>
+
+      {/* Chart area */}
+      <div style={{ flex: 1, position: 'relative' }}>
+        {/* Gridlines */}
+        {[maxHrs, midHrs].map(v => (
+          <div key={v} style={{
+            position: 'absolute',
+            left: 0, right: 0,
+            bottom: (v / maxHrs) * CHART_H + 20,
+            borderTop: '1px solid rgba(128,128,128,0.12)',
+            pointerEvents: 'none',
+          }} />
+        ))}
+
+        {/* Bars */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: CHART_H }}>
+          {plan.map((week, i) => {
+            const hrs = week.hrs || 0
+            const barH = hrs > 0 ? Math.max((hrs / maxHrs) * CHART_H, 3) : 3
+            const color = PHASE_COLORS[week.isRecovery ? 'recovery' : week.phase] || '#888'
+            const isHov = hovered === i
+
+            return (
+              <div
+                key={week.num}
+                style={{ flex: 1, height: barH, position: 'relative', cursor: 'default' }}
+                onMouseEnter={() => setHovered(i)}
+                onMouseLeave={() => setHovered(null)}
+              >
+                {isHov && (
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '100%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    marginBottom: 6,
+                    background: 'var(--color-surface)',
+                    border: '0.5px solid var(--color-border-strong)',
+                    borderRadius: 4,
+                    padding: '5px 9px',
+                    fontSize: 11,
+                    whiteSpace: 'nowrap',
+                    zIndex: 10,
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                    color: 'var(--color-text)',
+                    pointerEvents: 'none',
+                  }}>
+                    <strong>W{week.num}</strong> · {hrs}h
+                    <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 1 }}>
+                      {week.isRecovery ? 'Recovery' : week.phaseLabel}
+                    </div>
+                  </div>
+                )}
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  background: color,
+                  borderRadius: '2px 2px 0 0',
+                  opacity: isHov ? 0.75 : 1,
+                  transition: 'opacity 0.1s',
+                }} />
+              </div>
+            )
+          })}
+        </div>
+
+        {/* X-axis labels */}
+        <div style={{ display: 'flex', gap: 3, paddingTop: 5 }}>
+          {plan.map((week, i) => (
+            <div key={week.num} style={{
+              flex: 1,
+              textAlign: 'center',
+              fontSize: 9,
+              color: hovered === i ? 'var(--color-text-muted)' : 'var(--color-text-faint)',
+            }}>
+              {week.num}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StravaCard({ strava }) {
+  if (!strava?.configured) return null
+  const { account, syncing, syncMsg, onConnect, onSync } = strava
+  const connected = !!account
+  const lastSynced = account?.last_synced_at
+    ? new Date(account.last_synced_at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : null
+
+  return (
+    <div className="card">
+      <h2>Strava</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        {connected ? (
+          <>
+            <button className="btn btn-primary btn-sm" onClick={onSync} disabled={syncing}>
+              <i className="ti ti-refresh" aria-hidden="true" /> {syncing ? 'Syncing…' : 'Sync rides'}
+            </button>
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              {lastSynced ? `Last synced ${lastSynced}` : 'Connected — sync to import your rides'}
+            </span>
+          </>
+        ) : (
+          <>
+            <button
+              className="btn btn-sm"
+              onClick={onConnect}
+              style={{ background: '#FC4C02', borderColor: '#FC4C02', color: '#fff' }}
+            >
+              <i className="ti ti-brand-strava" aria-hidden="true" /> Connect Strava
+            </button>
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              Link Strava to attach your ride data to each session.
+            </span>
+          </>
+        )}
+      </div>
+      {syncMsg && (
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>{syncMsg}</div>
+      )}
+    </div>
+  )
+}
+
+export default function Overview({ user, plan, sessionState = {}, onToggle, doneSessions, totalSessions, daysLeft, strava }) {
   const pct = totalSessions ? Math.round((doneSessions / totalSessions) * 100) : 0
-
-  const chartData = {
-    labels: plan.map(w => `W${w.num}`),
-    datasets: [{
-      label: 'Hours',
-      data: plan.map(w => w.hrs),
-      backgroundColor: plan.map(w => PHASE_COLORS[w.phase] || '#888'),
-      borderRadius: 4,
-    }],
-  }
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y}h`, afterLabel: ctx => plan[ctx.dataIndex]?.label } } },
-    scales: {
-      x: { grid: { display: false }, ticks: { font: { size: 11 } } },
-      y: { beginAtZero: true, ticks: { callback: v => v + 'h', font: { size: 11 } }, grid: { color: 'rgba(128,128,128,0.1)' } },
-    },
-  }
 
   return (
     <div>
+      <TodayCard plan={plan} sessionState={sessionState} onToggle={onToggle} />
+      <StravaCard strava={strava} />
+
       <div className="stats-grid">
         <div className="stat-card"><div className="val">{plan.length}</div><div className="lbl">Weeks total</div></div>
         <div className="stat-card"><div className="val">{user.ftp ? user.ftp + 'W' : '—'}</div><div className="lbl">FTP</div></div>
@@ -59,9 +230,7 @@ export default function Overview({ user, plan, doneSessions, totalSessions, days
 
       <div className="card">
         <h2>Weekly volume</h2>
-        <div style={{ height: 200 }}>
-          <Bar data={chartData} options={chartOptions} />
-        </div>
+        <VolumeChart plan={plan} />
       </div>
 
       <div className="card">

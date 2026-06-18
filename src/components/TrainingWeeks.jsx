@@ -1,5 +1,71 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { getAdaptation, RPE_LABELS } from '../lib/planGenerator'
+import { getSessionDate } from '../lib/schedule'
+import { matchActivityToDate } from '../lib/strava'
+import ActivityDetail from './ActivityDetail'
+
+function NotesField({ note, onSave }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(note || '')
+
+  useEffect(() => { setDraft(note || '') }, [note])
+
+  function save() {
+    setEditing(false)
+    const trimmed = draft.trim()
+    if (trimmed !== (note || '')) onSave(trimmed)
+  }
+
+  if (editing) {
+    return (
+      <textarea
+        autoFocus
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={save}
+        placeholder="How did it go? Anything to remember…"
+        rows={2}
+        style={{
+          width: '100%', marginTop: 8, padding: '7px 10px', fontSize: 12,
+          fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical',
+          border: '0.5px solid var(--color-border-strong)', borderRadius: 'var(--radius-sm)',
+          background: 'var(--color-surface)', color: 'var(--color-text)', outline: 'none',
+        }}
+      />
+    )
+  }
+
+  if (note) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        style={{
+          marginTop: 8, display: 'flex', gap: 7, alignItems: 'flex-start', width: '100%',
+          textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+          background: 'rgba(0,0,0,0.04)', border: 'none', borderRadius: 'var(--radius-sm)',
+          padding: '7px 10px', fontSize: 12, lineHeight: 1.5, color: 'inherit',
+        }}
+      >
+        <i className="ti ti-note" style={{ fontSize: 13, opacity: 0.6, flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+        <span style={{ opacity: 0.9 }}>{note}</span>
+      </button>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      style={{
+        marginTop: 8, display: 'inline-flex', gap: 5, alignItems: 'center',
+        cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
+        padding: 0, fontSize: 11, fontWeight: 600, color: 'inherit', opacity: 0.55,
+        textTransform: 'uppercase', letterSpacing: '0.05em',
+      }}
+    >
+      <i className="ti ti-pencil-plus" style={{ fontSize: 13 }} aria-hidden="true" /> Add note
+    </button>
+  )
+}
 
 function ProgressRing({ done, total }) {
   const r = 14
@@ -24,7 +90,7 @@ function ProgressRing({ done, total }) {
   )
 }
 
-export default function TrainingWeeks({ plan, sessionState, onToggle, onRPE }) {
+export default function TrainingWeeks({ plan, sessionState, activities = [], onToggle, onRPE, onNote }) {
   const [openWeeks, setOpenWeeks] = useState(() => new Set([plan[0]?.num]))
 
   function toggleWeek(num) {
@@ -93,6 +159,7 @@ export default function TrainingWeeks({ plan, sessionState, onToggle, onRPE }) {
                     const key = `w${week.num}_${idx}`
                     const state = sessionState[key] || {}
                     const isRest = session.zone === 'rest'
+                    const matchedActivity = isRest ? null : matchActivityToDate(activities, getSessionDate(week.num, session, idx))
 
                     return (
                       <div key={idx} className={`sess-${session.zone}`}
@@ -151,6 +218,15 @@ export default function TrainingWeeks({ plan, sessionState, onToggle, onRPE }) {
                                 )}
                               </div>
                             )}
+
+                            {!isRest && (
+                              <NotesField
+                                note={state.notes}
+                                onSave={text => onNote(week.num, idx, text, session.zone)}
+                              />
+                            )}
+
+                            {matchedActivity && <ActivityDetail activity={matchedActivity} />}
                           </div>
                         </div>
                       </div>

@@ -1,18 +1,26 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { generatePlan } from '../lib/planGenerator'
-import { loadSessionState, upsertSessionState, loadAdjustments, addAdjustment, deleteAdjustment, updateUser } from '../lib/supabase'
+import { loadSessionState, upsertSessionState, loadAdjustments, addAdjustment, deleteAdjustment, updateUser, loadFtpHistory, addFtpEntry, getStravaAccount, loadActivities } from '../lib/supabase'
+import { syncStrava, getStravaAuthUrl, stravaConfigured } from '../lib/strava'
 import TrainingWeeks from './TrainingWeeks'
 import PowerZones from './PowerZones'
-import Nutrition from './Nutrition'
 import Adjustments from './Adjustments'
 import Overview from './Overview'
+import CalendarView from './CalendarView'
+import PlanGuide from './PlanGuide'
 
 export default function Dashboard({ user, onLogout, onUpdateUser }) {
   const [tab, setTab] = useState('overview')
   const [plan, setPlan] = useState([])
-  const [sessionState, setSessionState] = useState({}) // { 'w1_0': { completed, rpe, zone } }
+  const [sessionState, setSessionState] = useState({}) // { 'w1_0': { completed, rpe, notes, zone } }
   const [adjustments, setAdjustments] = useState([])
+  const [ftpHistory, setFtpHistory] = useState([])
+  const [activities, setActivities] = useState([])
+  const [stravaAccount, setStravaAccount] = useState(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState('')
   const [loading, setLoading] = useState(true)
+  const autoSyncedRef = useRef(false)
 
   const raceDate = user.event_date ? new Date(user.event_date) : null
   const daysLeft = raceDate ? Math.ceil((raceDate - new Date()) / (1000 * 60 * 60 * 24)) : null
@@ -25,14 +33,23 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
   // Load persisted state from Supabase
   useEffect(() => {
     if (!user?.id) return
-    Promise.all([loadSessionState(user.id), loadAdjustments(user.id)]).then(([sessions, adjs]) => {
+    Promise.all([
+      loadSessionState(user.id),
+      loadAdjustments(user.id),
+      loadFtpHistory(user.id),
+      getStravaAccount(user.id),
+      loadActivities(user.id),
+    ]).then(([sessions, adjs, ftps, strava, acts]) => {
       const stateMap = {}
       sessions.forEach(s => {
         const key = `w${s.week_num}_${s.session_idx}`
-        stateMap[key] = { completed: s.completed, rpe: s.rpe, zone: null }
+        stateMap[key] = { completed: s.completed, rpe: s.rpe, notes: s.notes, zone: null }
       })
       setSessionState(stateMap)
       setAdjustments(adjs)
+      setFtpHistory(ftps)
+      setStravaAccount(strava)
+      setActivities(acts)
       setLoading(false)
     })
   }, [user?.id])
@@ -53,6 +70,16 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     })
   }, [plan])
 
+  // Auto-sync Strava once per session if the last sync is stale (> 1h).
+  useEffect(() => {
+    if (autoSyncedRef.current || !stravaAccount) return
+    const last = stravaAccount.last_synced_at ? new Date(stravaAccount.last_synced_at).getTime() : 0
+    if (Date.now() - last > 60 * 60 * 1000) {
+      autoSyncedRef.current = true
+      handleSyncStrava()
+    }
+  }, [stravaAccount])
+
   const toggleSession = useCallback(async (weekNum, idx, zone) => {
     const key = `w${weekNum}_${idx}`
     const current = sessionState[key] || {}
@@ -66,6 +93,12 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     const key = `w${weekNum}_${idx}`
     setSessionState(prev => ({ ...prev, [key]: { ...prev[key], rpe, zone } }))
     await upsertSessionState(user.id, weekNum, idx, { rpe })
+  }, [user.id])
+
+  const setNote = useCallback(async (weekNum, idx, notes, zone) => {
+    const key = `w${weekNum}_${idx}`
+    setSessionState(prev => ({ ...prev, [key]: { ...prev[key], notes, zone } }))
+    await upsertSessionState(user.id, weekNum, idx, { notes })
   }, [user.id])
 
   async function handleAddAdjustment(adj) {
@@ -82,8 +115,29 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
   async function handleUpdateFTP(newFTP) {
     const updated = { ...user, ftp: newFTP }
     await updateUser(user.id, { ftp: newFTP })
+    const entry = await addFtpEntry(user.id, newFTP)
+    if (entry) setFtpHistory(prev => [...prev, entry])
     onUpdateUser(updated)
     setPlan(generatePlan(updated))
+  }
+
+  function handleConnectStrava() {
+    window.location.href = getStravaAuthUrl()
+  }
+
+  async function handleSyncStrava() {
+    setSyncing(true)
+    setSyncMsg('')
+    try {
+      const res = await syncStrava()
+      const [acts, strava] = await Promise.all([loadActivities(user.id), getStravaAccount(user.id)])
+      setActivities(acts)
+      setStravaAccount(strava)
+      setSyncMsg(res.imported ? `Imported ${res.imported} ride${res.imported === 1 ? '' : 's'}.` : 'Up to date — no new rides.')
+    } catch (e) {
+      setSyncMsg(e.message === 'not connected' ? 'Connect Strava first.' : `Sync failed: ${e.message}`)
+    }
+    setSyncing(false)
   }
 
   const totalSessions = plan.reduce((a, w) => a + w.sessions.filter(s => s.zone !== 'rest').length, 0)
@@ -91,9 +145,10 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
 
   const TABS = [
     { id: 'overview', label: 'Overview' },
+    { id: 'calendar', label: 'Calendar' },
     { id: 'training', label: 'Training weeks' },
+    { id: 'guide', label: 'Plan guide' },
     { id: 'zones', label: 'Power zones' },
-    { id: 'nutrition', label: 'Nutrition' },
     { id: 'adjustments', label: 'Adjustments' },
   ]
 
@@ -136,11 +191,13 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
         </div>
       ) : (
         <>
-          {tab === 'overview' && <Overview user={user} plan={plan} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft} />}
-          {tab === 'training' && <TrainingWeeks plan={plan} sessionState={sessionState} onToggle={toggleSession} onRPE={setRPE} />}
-          {tab === 'zones' && <PowerZones user={user} onUpdateFTP={handleUpdateFTP} />}
-          {tab === 'nutrition' && <Nutrition user={user} />}
-          {tab === 'adjustments' && <Adjustments user={user} adjustments={adjustments} plan={plan} onAdd={handleAddAdjustment} onDelete={handleDeleteAdjustment} onUpdateFTP={handleUpdateFTP} />}
+          {tab === 'overview' && <Overview user={user} plan={plan} sessionState={sessionState} onToggle={toggleSession} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
+            strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }} />}
+          {tab === 'calendar' && <CalendarView plan={plan} sessionState={sessionState} eventName={user.event_name} />}
+          {tab === 'training' && <TrainingWeeks plan={plan} sessionState={sessionState} activities={activities} onToggle={toggleSession} onRPE={setRPE} onNote={setNote} />}
+          {tab === 'guide' && <PlanGuide plan={plan} user={user} />}
+          {tab === 'zones' && <PowerZones user={user} onUpdateFTP={handleUpdateFTP} ftpHistory={ftpHistory} />}
+{tab === 'adjustments' && <Adjustments user={user} adjustments={adjustments} plan={plan} onAdd={handleAddAdjustment} onDelete={handleDeleteAdjustment} onUpdateFTP={handleUpdateFTP} />}
         </>
       )}
     </div>

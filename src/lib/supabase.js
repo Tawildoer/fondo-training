@@ -5,33 +5,43 @@ const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export const supabase = createClient(supabaseUrl, supabaseKey)
 
-// ── Invite codes ────────────────────────────────────────────
+// ── Auth ─────────────────────────────────────────────────────
 
-export async function validateInviteCode(code) {
-  const { data, error } = await supabase
-    .from('invite_codes')
-    .select('*')
-    .eq('code', code.toUpperCase().trim())
-    .single()
-  if (error || !data) return { valid: false }
-  return { valid: true, code: data }
+export async function signUp(email, password) {
+  const { data, error } = await supabase.auth.signUp({ email, password })
+  if (error) throw error
+  return data
 }
 
-export async function claimInviteCode(code, userId) {
-  const { error } = await supabase
-    .from('invite_codes')
-    .update({ claimed_by: userId, claimed_at: new Date().toISOString() })
-    .eq('code', code)
-  return !error
+export async function signIn(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  if (error) throw error
+  return data
 }
 
-// ── Users ───────────────────────────────────────────────────
+export async function signOut() {
+  await supabase.auth.signOut()
+}
 
-export async function getUserByCode(code) {
+export async function sendPasswordReset(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin,
+  })
+  if (error) throw error
+}
+
+export async function updatePassword(newPassword) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) throw error
+}
+
+// ── Users ────────────────────────────────────────────────────
+
+export async function getUserByAuthId(authId) {
   const { data } = await supabase
     .from('users')
     .select('*')
-    .eq('invite_code', code.toUpperCase().trim())
+    .eq('auth_id', authId)
     .single()
   return data
 }
@@ -54,7 +64,48 @@ export async function updateUser(userId, updates) {
   return !error
 }
 
-// ── Session state ───────────────────────────────────────────
+// ── FTP history ──────────────────────────────────────────────
+
+export async function loadFtpHistory(userId) {
+  const { data } = await supabase
+    .from('ftp_history')
+    .select('*')
+    .eq('user_id', userId)
+    .order('recorded_at', { ascending: true })
+  return data || []
+}
+
+export async function addFtpEntry(userId, ftp) {
+  const { data, error } = await supabase
+    .from('ftp_history')
+    .insert([{ user_id: userId, ftp }])
+    .select()
+    .single()
+  if (error) return null
+  return data
+}
+
+// ── Strava ───────────────────────────────────────────────────
+
+export async function getStravaAccount(userId) {
+  const { data } = await supabase
+    .from('strava_accounts')
+    .select('athlete_id, last_synced_at')
+    .eq('user_id', userId)
+    .single()
+  return data
+}
+
+export async function loadActivities(userId) {
+  const { data } = await supabase
+    .from('activities')
+    .select('*')
+    .eq('user_id', userId)
+    .order('start_date', { ascending: false })
+  return data || []
+}
+
+// ── Session state ────────────────────────────────────────────
 
 export async function loadSessionState(userId) {
   const { data } = await supabase
@@ -77,7 +128,7 @@ export async function upsertSessionState(userId, weekNum, sessionIdx, updates) {
   return !error
 }
 
-// ── Adjustments ─────────────────────────────────────────────
+// ── Adjustments ──────────────────────────────────────────────
 
 export async function loadAdjustments(userId) {
   const { data } = await supabase

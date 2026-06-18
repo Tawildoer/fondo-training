@@ -9,6 +9,57 @@ const HR_ZONE_FACTORS = [
   { z: 'Z5', name: 'VO2 max',   factors: [0.89, 1.00] },
 ]
 
+function FtpChart({ history }) {
+  const W = 320, H = 130, padL = 6, padR = 6, padT = 14, padB = 22
+  const values = history.map(h => h.ftp)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const range = (max - min) || 1
+  const n = history.length
+
+  const xAt = i => n === 1 ? W / 2 : padL + (i / (n - 1)) * (W - padL - padR)
+  const yAt = v => padT + (1 - (v - min) / range) * (H - padT - padB)
+
+  const points = history.map((h, i) => ({ x: xAt(i), y: yAt(h.ftp), ftp: h.ftp, date: new Date(h.recorded_at) }))
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
+
+  const first = history[0]
+  const last = history[history.length - 1]
+  const delta = last.ftp - first.ftp
+  const fmt = d => new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em' }}>{last.ftp}W</span>
+        {n > 1 && (
+          <span style={{
+            fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
+            background: delta >= 0 ? 'var(--color-green-light)' : 'var(--color-red-light)',
+            color: delta >= 0 ? 'var(--color-green-text)' : 'var(--color-red-text)',
+          }}>
+            {delta >= 0 ? '+' : ''}{delta}W since {fmt(first.recorded_at)}
+          </span>
+        )}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
+        {n > 1 && <path d={linePath} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+        {points.map((p, i) => (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r="3.5" fill="var(--color-accent)" />
+            {(i === 0 || i === n - 1 || n === 1) && (
+              <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="9" fill="var(--color-text-muted)" fontWeight="600">{p.ftp}</text>
+            )}
+            <text x={Math.min(Math.max(p.x, 14), W - 14)} y={H - 6} textAnchor="middle" fontSize="8" fill="var(--color-text-faint)">
+              {fmt(p.date)}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  )
+}
+
 function ZoneTable({ columns, rows }) {
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -43,7 +94,7 @@ function ZoneTable({ columns, rows }) {
   )
 }
 
-export default function PowerZones({ user, onUpdateFTP }) {
+export default function PowerZones({ user, onUpdateFTP, ftpHistory = [] }) {
   const [ftpInput, setFtpInput] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -120,6 +171,20 @@ export default function PowerZones({ user, onUpdateFTP }) {
           Updating your FTP recalculates all zones and regenerates your plan targets.
         </p>
       </div>
+
+      {ftp && (
+        <div className="card">
+          <h2>FTP progression</h2>
+          {ftpHistory.length > 0 ? (
+            <FtpChart history={ftpHistory} />
+          ) : (
+            <div className="tip-box" style={{ marginBottom: 0 }}>
+              <i className="ti ti-chart-line" aria-hidden="true" />
+              <span>Your FTP progression will chart here as you log updates. Update your FTP above after each test to track gains over time.</span>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="card">
         <h2>Power zones{ftp ? ` — FTP ${ftp}W` : ''}</h2>

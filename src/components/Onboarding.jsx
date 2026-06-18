@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { createUser, claimInviteCode } from '../lib/supabase'
+import { createUser } from '../lib/supabase'
 
 const EVENT_TYPES = [
   { value: 'gran_fondo', label: 'Gran Fondo', icon: 'ti-mountain' },
@@ -27,7 +27,7 @@ const STEPS = [
   { id: 'confirm', title: 'All set', subtitle: 'Here\'s your plan summary.' },
 ]
 
-export default function Onboarding({ inviteCode, onComplete }) {
+export default function Onboarding({ authUser, onComplete }) {
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -67,7 +67,7 @@ export default function Onboarding({ inviteCode, onComplete }) {
       const weeks = form.weeks_available || weeksUntilEvent() || 13
       const profile = {
         name: form.name.trim(),
-        invite_code: inviteCode,
+        auth_id: authUser.id,
         event_name: form.event_name || null,
         event_date: form.event_date || null,
         event_distance_km: form.event_distance_km ? parseInt(form.event_distance_km) : null,
@@ -81,7 +81,6 @@ export default function Onboarding({ inviteCode, onComplete }) {
         days_per_week: parseInt(form.days_per_week) || 5,
       }
       const newUser = await createUser(profile)
-      await claimInviteCode(inviteCode, newUser.id)
       onComplete(newUser)
     } catch (err) {
       setError('Something went wrong saving your profile. Try again.')

@@ -1,38 +1,71 @@
 import { useState, useEffect } from 'react'
 import Login from './components/Login'
+import ResetPassword from './components/ResetPassword'
 import Onboarding from './components/Onboarding'
 import Dashboard from './components/Dashboard'
-import { getUserByCode } from './lib/supabase'
+import { supabase, getUserByAuthId, signOut } from './lib/supabase'
+import { exchangeStravaCode } from './lib/strava'
 
 export default function App() {
   const [screen, setScreen] = useState('loading') // loading | login | onboarding | dashboard
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState(null)       // full profile row from users table
+  const [authUser, setAuthUser] = useState(null) // supabase auth user (needed during onboarding)
 
-  // Persist login via localStorage (just the invite code)
   useEffect(() => {
-    const savedCode = localStorage.getItem('fondo_invite_code')
-    if (savedCode) {
-      getUserByCode(savedCode).then(userData => {
-        if (userData) {
-          setUser(userData)
-          setScreen('dashboard')
-        } else {
-          setScreen('login')
-        }
-      })
-    } else {
-      setScreen('login')
+    // A password-recovery link lands with a #type=recovery token in the URL.
+    // Capture it before Supabase clears the hash so we show the reset screen
+    // instead of routing straight into the dashboard.
+    const isRecovery = window.location.hash.includes('type=recovery')
+
+    // Handle auth events from anywhere (sign-out, recovery link in another tab).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setScreen('reset-password')
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null)
+        setAuthUser(null)
+        setScreen('login')
+      }
+    })
+
+    if (isRecovery) {
+      setScreen('reset-password')
+      return () => subscription.unsubscribe()
     }
+
+    // Check for an existing session on mount
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) { setScreen('login'); return }
+
+      // Handle a Strava OAuth redirect (?code=…&scope=…) landing on the app.
+      const params = new URLSearchParams(window.location.search)
+      const stravaCode = params.get('code')
+      if (stravaCode && params.get('scope')) {
+        try { await exchangeStravaCode(stravaCode, params.get('scope')) } catch (e) { /* surfaced on dashboard */ }
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+
+      const profile = await getUserByAuthId(session.user.id)
+      if (profile) {
+        setUser(profile)
+        setScreen('dashboard')
+      } else {
+        setAuthUser(session.user)
+        setScreen('onboarding')
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
-  function handleValidCode(code, existingUser) {
-    localStorage.setItem('fondo_invite_code', code)
-    if (existingUser) {
-      setUser(existingUser)
-      setScreen('dashboard')
-    } else {
-      setScreen('onboarding')
-    }
+  function handleSignedIn(profile) {
+    setUser(profile)
+    setScreen('dashboard')
+  }
+
+  function handleSignedUp(supabaseAuthUser) {
+    setAuthUser(supabaseAuthUser)
+    setScreen('onboarding')
   }
 
   function handleOnboardingComplete(newUser) {
@@ -40,9 +73,10 @@ export default function App() {
     setScreen('dashboard')
   }
 
-  function handleLogout() {
-    localStorage.removeItem('fondo_invite_code')
+  async function handleLogout() {
+    await signOut()
     setUser(null)
+    setAuthUser(null)
     setScreen('login')
   }
 
@@ -54,10 +88,8 @@ export default function App() {
     )
   }
 
-  if (screen === 'login') return <Login onSuccess={handleValidCode} />
-  if (screen === 'onboarding') {
-    const code = localStorage.getItem('fondo_invite_code')
-    return <Onboarding inviteCode={code} onComplete={handleOnboardingComplete} />
-  }
+  if (screen === 'login') return <Login onSignedIn={handleSignedIn} onSignedUp={handleSignedUp} />
+  if (screen === 'reset-password') return <ResetPassword onSignedIn={handleSignedIn} onSignedUp={handleSignedUp} />
+  if (screen === 'onboarding') return <Onboarding authUser={authUser} onComplete={handleOnboardingComplete} />
   if (screen === 'dashboard') return <Dashboard user={user} onLogout={handleLogout} onUpdateUser={setUser} />
 }
