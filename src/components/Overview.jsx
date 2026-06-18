@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { getTodaySessions } from '../lib/schedule'
 import { RPE_LABELS } from '../lib/planGenerator'
+import { computeTrainingLoad } from '../lib/trainingLoad'
 
 const PHASE_COLORS = { base: '#378ADD', build: '#639922', 'race-prep': '#534AB7', taper: '#EF9F27', recovery: '#888780' }
 const CHART_H = 150
@@ -321,7 +322,90 @@ function StravaCard({ strava }) {
   )
 }
 
-export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, onToggle, onBail, onRPE, doneSessions, totalSessions, daysLeft, strava }) {
+function formMeta(tsb) {
+  if (tsb > 8) return { label: 'Fresh', color: 'var(--color-green-text)', bg: 'var(--color-green-light)' }
+  if (tsb < -15) return { label: 'Fatigued', color: 'var(--color-red-text)', bg: 'var(--color-red-light)' }
+  return { label: 'Balanced', color: 'var(--color-accent-text)', bg: 'var(--color-accent-light)' }
+}
+
+function TrainingLoadCard({ plan, sessionState, activities, user, planStart }) {
+  const { series, current, hasData, fromRides } = useMemo(
+    () => computeTrainingLoad(plan, sessionState, activities, user, planStart),
+    [plan, sessionState, activities, user, planStart]
+  )
+
+  if (!hasData) {
+    return (
+      <div className="card">
+        <h2>Training load</h2>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+          Complete a few sessions (or sync some rides) and your fitness, fatigue and form
+          curves will build here.
+        </p>
+      </div>
+    )
+  }
+
+  const W = 320, H = 140, padL = 6, padR = 6, padT = 14, padB = 20
+  const n = series.length
+  const maxY = Math.max(1, ...series.map(s => Math.max(s.ctl, s.atl)))
+  const xAt = i => n === 1 ? W / 2 : padL + (i / (n - 1)) * (W - padL - padR)
+  const yAt = v => padT + (1 - v / maxY) * (H - padT - padB)
+  const pathFor = key => series.map((s, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(s[key]).toFixed(1)}`).join(' ')
+  const fmt = d => new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+  const form = formMeta(current.tsb)
+
+  return (
+    <div className="card">
+      <h2>Training load</h2>
+
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--color-accent-text)' }}>{current.ctl}</div>
+          <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fitness (CTL)</div>
+        </div>
+        <div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--color-amber-text)' }}>{current.atl}</div>
+          <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fatigue (ATL)</div>
+        </div>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em' }}>{current.tsb > 0 ? '+' : ''}{current.tsb}</span>
+            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: form.bg, color: form.color }}>{form.label}</span>
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Form (TSB)</div>
+        </div>
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
+        <path d={pathFor('ctl')} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={pathFor('atl')} fill="none" stroke="var(--color-amber-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 3" />
+        {n > 0 && (
+          <>
+            <text x={padL} y={H - 4} textAnchor="start" fontSize="8" fill="var(--color-text-faint)">{fmt(series[0].date)}</text>
+            <text x={W - padR} y={H - 4} textAnchor="end" fontSize="8" fill="var(--color-text-faint)">{fmt(series[n - 1].date)}</text>
+          </>
+        )}
+      </svg>
+
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--color-text-muted)' }}>
+          <span style={{ width: 14, height: 2, background: 'var(--color-accent)', display: 'inline-block' }} /> Fitness
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--color-text-muted)' }}>
+          <span style={{ width: 14, height: 2, background: 'var(--color-amber-text)', display: 'inline-block' }} /> Fatigue
+        </span>
+      </div>
+      <p style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 8, lineHeight: 1.5 }}>
+        {fromRides
+          ? 'From your synced rides (power or HR based), estimated from planned zones on days without a ride.'
+          : 'Estimated from planned zones + your RPE — sync rides for power-based accuracy.'}
+      </p>
+    </div>
+  )
+}
+
+export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], onToggle, onBail, onRPE, doneSessions, totalSessions, daysLeft, strava }) {
   const pct = totalSessions ? Math.round((doneSessions / totalSessions) * 100) : 0
 
   return (
@@ -362,6 +446,8 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
         <h2>Weekly volume</h2>
         <VolumeChart plan={plan} />
       </div>
+
+      <TrainingLoadCard plan={plan} sessionState={sessionState} activities={activities} user={user} planStart={planStart} />
 
       <div className="card">
         <h2>Event summary</h2>
