@@ -288,35 +288,27 @@ function StravaCard({ strava }) {
     : null
 
   return (
-    <div className="card">
-      <h2>Strava</h2>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        {connected ? (
-          <>
-            <button className="btn btn-primary btn-sm" onClick={onSync} disabled={syncing}>
-              <i className="ti ti-refresh" aria-hidden="true" /> {syncing ? 'Syncing…' : 'Sync rides'}
-            </button>
-            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-              {lastSynced ? `Last synced ${lastSynced}` : 'Connected — sync to import your rides'}
-            </span>
-          </>
-        ) : (
-          <>
-            <button
-              className="btn btn-sm"
-              onClick={onConnect}
-              style={{ background: '#FC4C02', borderColor: '#FC4C02', color: '#fff' }}
-            >
-              <i className="ti ti-brand-strava" aria-hidden="true" /> Connect Strava
-            </button>
-            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-              Link Strava to attach your ride data to each session.
-            </span>
-          </>
-        )}
-      </div>
-      {syncMsg && (
-        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>{syncMsg}</div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 1.25rem', fontSize: 12, color: 'var(--color-text-muted)' }}>
+      <i className="ti ti-brand-strava" style={{ fontSize: 15, color: '#FC4C02', flexShrink: 0 }} aria-hidden="true" />
+      {connected ? (
+        <>
+          <button className="btn btn-sm" onClick={onSync} disabled={syncing}>
+            <i className="ti ti-refresh" aria-hidden="true" /> {syncing ? 'Syncing…' : 'Sync rides'}
+          </button>
+          <span>{lastSynced ? `Last synced ${lastSynced}` : 'Connected'}</span>
+          {syncMsg && <span style={{ opacity: 0.85 }}>· {syncMsg}</span>}
+        </>
+      ) : (
+        <>
+          <button
+            className="btn btn-sm"
+            onClick={onConnect}
+            style={{ background: '#FC4C02', borderColor: '#FC4C02', color: '#fff' }}
+          >
+            <i className="ti ti-brand-strava" aria-hidden="true" /> Connect Strava
+          </button>
+          <span>to attach ride data to each session.</span>
+        </>
       )}
     </div>
   )
