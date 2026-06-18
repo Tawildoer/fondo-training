@@ -4,7 +4,7 @@ import { getTodaySessions } from '../lib/schedule'
 const PHASE_COLORS = { base: '#378ADD', build: '#639922', 'race-prep': '#534AB7', taper: '#EF9F27', recovery: '#888780' }
 const CHART_H = 150
 
-function TodayCard({ plan, sessionState, onToggle }) {
+function TodayCard({ plan, sessionState, onToggle, onBail }) {
   const todays = getTodaySessions(plan)
   const dateLabel = new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
 
@@ -17,8 +17,9 @@ function TodayCard({ plan, sessionState, onToggle }) {
         {todays.map(({ session, weekNum, idx }) => {
           const isRest = session.zone === 'rest'
           const state = sessionState[`w${weekNum}_${idx}`] || {}
+          const bailed = !!state.bailed && !isRest
           return (
-            <div key={idx} className={`sess-${session.zone}`} style={{ borderRadius: 'var(--radius-sm)', padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <div key={idx} className={`sess-${session.zone}`} style={{ borderRadius: 'var(--radius-sm)', padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: 12, opacity: bailed ? 0.6 : 1 }}>
               {!isRest && (
                 <input
                   type="checkbox"
@@ -28,12 +29,33 @@ function TodayCard({ plan, sessionState, onToggle }) {
                 />
               )}
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>
-                  {state.completed && !isRest
+                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {(state.completed || bailed) && !isRest
                     ? <span style={{ textDecoration: 'line-through', opacity: 0.55 }}>{session.name}</span>
                     : session.name}
+                  {bailed && (
+                    <span className="tag" style={{ background: 'var(--color-red-light)', color: 'var(--color-red-text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <i className="ti ti-circle-x" style={{ fontSize: 12 }} aria-hidden="true" /> Missed
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{session.desc}</div>
+                {!isRest && !state.completed && (
+                  <button
+                    onClick={() => onBail(weekNum, idx, session.zone)}
+                    style={{
+                      marginTop: 8, display: 'inline-flex', gap: 5, alignItems: 'center',
+                      cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
+                      padding: 0, fontSize: 11, fontWeight: 600,
+                      color: bailed ? 'inherit' : 'var(--color-red-text)', opacity: bailed ? 0.55 : 0.8,
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                    }}
+                  >
+                    {bailed
+                      ? <><i className="ti ti-arrow-back-up" style={{ fontSize: 13 }} aria-hidden="true" /> Un-mark missed</>
+                      : <><i className="ti ti-circle-x" style={{ fontSize: 13 }} aria-hidden="true" /> Bail</>}
+                  </button>
+                )}
               </div>
             </div>
           )
@@ -193,12 +215,12 @@ function StravaCard({ strava }) {
   )
 }
 
-export default function Overview({ user, plan, sessionState = {}, onToggle, doneSessions, totalSessions, daysLeft, strava }) {
+export default function Overview({ user, plan, sessionState = {}, onToggle, onBail, doneSessions, totalSessions, daysLeft, strava }) {
   const pct = totalSessions ? Math.round((doneSessions / totalSessions) * 100) : 0
 
   return (
     <div>
-      <TodayCard plan={plan} sessionState={sessionState} onToggle={onToggle} />
+      <TodayCard plan={plan} sessionState={sessionState} onToggle={onToggle} onBail={onBail} />
       <StravaCard strava={strava} />
 
       <div className="stats-grid">

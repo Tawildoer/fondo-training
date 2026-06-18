@@ -43,7 +43,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
       const stateMap = {}
       sessions.forEach(s => {
         const key = `w${s.week_num}_${s.session_idx}`
-        stateMap[key] = { completed: s.completed, rpe: s.rpe, notes: s.notes, zone: null }
+        stateMap[key] = { completed: s.completed, bailed: s.bailed, rpe: s.rpe, notes: s.notes, zone: null }
       })
       setSessionState(stateMap)
       setAdjustments(adjs)
@@ -85,8 +85,18 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     const current = sessionState[key] || {}
     const newCompleted = !current.completed
     const now = newCompleted ? new Date().toISOString() : null
-    setSessionState(prev => ({ ...prev, [key]: { ...prev[key], completed: newCompleted, zone } }))
-    await upsertSessionState(user.id, weekNum, idx, { completed: newCompleted, completed_at: now })
+    // Completing a session clears any "bailed" mark — they're mutually exclusive.
+    setSessionState(prev => ({ ...prev, [key]: { ...prev[key], completed: newCompleted, bailed: newCompleted ? false : prev[key]?.bailed, zone } }))
+    await upsertSessionState(user.id, weekNum, idx, { completed: newCompleted, completed_at: now, ...(newCompleted ? { bailed: false } : {}) })
+  }, [sessionState, user.id])
+
+  const bailSession = useCallback(async (weekNum, idx, zone) => {
+    const key = `w${weekNum}_${idx}`
+    const current = sessionState[key] || {}
+    const newBailed = !current.bailed
+    // Bailing clears completion (and its timestamp); un-bailing just lifts the mark.
+    setSessionState(prev => ({ ...prev, [key]: { ...prev[key], bailed: newBailed, completed: newBailed ? false : prev[key]?.completed, zone } }))
+    await upsertSessionState(user.id, weekNum, idx, { bailed: newBailed, ...(newBailed ? { completed: false, completed_at: null } : {}) })
   }, [sessionState, user.id])
 
   const setRPE = useCallback(async (weekNum, idx, rpe, zone) => {
@@ -191,10 +201,10 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
         </div>
       ) : (
         <>
-          {tab === 'overview' && <Overview user={user} plan={plan} sessionState={sessionState} onToggle={toggleSession} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
+          {tab === 'overview' && <Overview user={user} plan={plan} sessionState={sessionState} onToggle={toggleSession} onBail={bailSession} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
             strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }} />}
           {tab === 'calendar' && <CalendarView plan={plan} sessionState={sessionState} eventName={user.event_name} />}
-          {tab === 'training' && <TrainingWeeks plan={plan} sessionState={sessionState} activities={activities} onToggle={toggleSession} onRPE={setRPE} onNote={setNote} />}
+          {tab === 'training' && <TrainingWeeks plan={plan} sessionState={sessionState} activities={activities} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} />}
           {tab === 'guide' && <PlanGuide plan={plan} user={user} />}
           {tab === 'zones' && <PowerZones user={user} onUpdateFTP={handleUpdateFTP} ftpHistory={ftpHistory} />}
 {tab === 'adjustments' && <Adjustments user={user} adjustments={adjustments} plan={plan} onAdd={handleAddAdjustment} onDelete={handleDeleteAdjustment} onUpdateFTP={handleUpdateFTP} />}

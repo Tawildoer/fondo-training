@@ -90,7 +90,7 @@ function ProgressRing({ done, total }) {
   )
 }
 
-export default function TrainingWeeks({ plan, sessionState, activities = [], onToggle, onRPE, onNote }) {
+export default function TrainingWeeks({ plan, sessionState, activities = [], onToggle, onBail, onRPE, onNote }) {
   const [openWeeks, setOpenWeeks] = useState(() => new Set([plan[0]?.num]))
 
   function toggleWeek(num) {
@@ -159,11 +159,12 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], onT
                     const key = `w${week.num}_${idx}`
                     const state = sessionState[key] || {}
                     const isRest = session.zone === 'rest'
+                    const bailed = !!state.bailed && !isRest
                     const matchedActivity = isRest ? null : matchActivityToDate(activities, getSessionDate(week.num, session, idx))
 
                     return (
                       <div key={idx} className={`sess-${session.zone}`}
-                        style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                        style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px', opacity: bailed ? 0.6 : 1 }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                           <div style={{ paddingTop: 2, width: 18, flexShrink: 0 }}>
                             {!isRest && (
@@ -181,15 +182,37 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], onT
                                 {session.day}
                               </span>
                               <span style={{ fontSize: 13, fontWeight: 600 }}>
-                                {state.completed && !isRest
+                                {(state.completed || bailed) && !isRest
                                   ? <span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{session.name}</span>
                                   : session.name}
                               </span>
                               {state.completed && !isRest && (
                                 <i className="ti ti-circle-check" style={{ fontSize: 14, opacity: 0.7 }} aria-hidden="true" />
                               )}
+                              {bailed && (
+                                <span className="tag" style={{ background: 'var(--color-red-light)', color: 'var(--color-red-text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  <i className="ti ti-circle-x" style={{ fontSize: 12 }} aria-hidden="true" /> Missed
+                                </span>
+                              )}
                             </div>
                             <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{session.desc}</div>
+
+                            {!isRest && !state.completed && (
+                              <button
+                                onClick={() => onBail(week.num, idx, session.zone)}
+                                style={{
+                                  marginTop: 8, marginRight: 14, display: 'inline-flex', gap: 5, alignItems: 'center',
+                                  cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
+                                  padding: 0, fontSize: 11, fontWeight: 600,
+                                  color: bailed ? 'inherit' : 'var(--color-red-text)', opacity: bailed ? 0.55 : 0.8,
+                                  textTransform: 'uppercase', letterSpacing: '0.05em',
+                                }}
+                              >
+                                {bailed
+                                  ? <><i className="ti ti-arrow-back-up" style={{ fontSize: 13 }} aria-hidden="true" /> Un-mark missed</>
+                                  : <><i className="ti ti-circle-x" style={{ fontSize: 13 }} aria-hidden="true" /> Bail</>}
+                              </button>
+                            )}
 
                             {state.completed && !isRest && (
                               <div style={{ marginTop: 10, paddingTop: 8, borderTop: '0.5px solid rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

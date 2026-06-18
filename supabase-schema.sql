@@ -34,12 +34,15 @@ create table session_state (
   week_num int not null,
   session_idx int not null,
   completed boolean default false,
+  bailed boolean default false,    -- explicitly marked missed / bailed on
   rpe int check (rpe between 1 and 5),
   notes text,
   completed_at timestamptz,
   updated_at timestamptz default now(),
   unique (user_id, week_num, session_idx)
 );
+-- Migration for existing databases (safe to re-run):
+--   alter table session_state add column if not exists bailed boolean default false;
 
 -- 2b. FTP history (one row per logged FTP update)
 create table ftp_history (
