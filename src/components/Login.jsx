@@ -178,7 +178,7 @@ export default function Login({ onSignedIn, onSignedUp }) {
             <i className="ti ti-bike" style={{ fontSize: 24, color: 'var(--color-accent-text)' }} aria-hidden="true" />
           </div>
           <h1 style={{ fontSize: '1.4rem', fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 6 }}>
-            Cycling Training Planner
+            wattsToCome
           </h1>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
             {mode === 'signin' ? 'Sign in to your account.' : 'Create a free account to get started.'}

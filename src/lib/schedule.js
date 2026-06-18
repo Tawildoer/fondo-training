@@ -131,7 +131,7 @@ export function buildICS(plan, { calendarName = 'Training Plan', base = new Date
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Cycling Training Planner//EN',
+    'PRODID:-//wattsToCome//EN',
     'CALSCALE:GREGORIAN',
     `X-WR-CALNAME:${escapeICS(calendarName)}`,
   ]
