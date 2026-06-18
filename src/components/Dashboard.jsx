@@ -231,7 +231,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
         </div>
       ) : (
         <>
-          {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} onToggle={toggleSession} onBail={bailSession} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
+          {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
             strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }} />}
           {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={user.event_name} />}
           {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} />}

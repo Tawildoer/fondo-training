@@ -1,11 +1,35 @@
 import { useState } from 'react'
 import { getTodaySessions } from '../lib/schedule'
+import { RPE_LABELS } from '../lib/planGenerator'
 
 const PHASE_COLORS = { base: '#378ADD', build: '#639922', 'race-prep': '#534AB7', taper: '#EF9F27', recovery: '#888780' }
 const CHART_H = 150
 
-function CatchUpCard({ unconfirmed, onToggle, onBail }) {
-  if (!unconfirmed?.length) return null
+function CatchUpCard({ unconfirmed, onToggle, onBail, onRPE }) {
+  // Sessions just confirmed "Did it" are retained locally so the user can rate
+  // them before they drop out of the unconfirmed list.
+  const [rating, setRating] = useState({}) // key -> session item awaiting RPE
+
+  function key(i) { return `${i.weekNum}_${i.idx}` }
+
+  function didIt(item) {
+    onToggle(item.weekNum, item.idx, item.session.zone)
+    setRating(prev => ({ ...prev, [key(item)]: item }))
+  }
+  function dismiss(item) {
+    setRating(prev => { const next = { ...prev }; delete next[key(item)]; return next })
+  }
+  function pickRPE(item, r) {
+    onRPE(item.weekNum, item.idx, r, item.session.zone)
+    dismiss(item)
+  }
+
+  const ratingKeys = new Set(Object.keys(rating))
+  const asking = (unconfirmed || []).filter(i => !ratingKeys.has(key(i)))
+  const ratingItems = Object.values(rating)
+
+  if (!asking.length && !ratingItems.length) return null
+
   return (
     <div className="card" style={{ borderLeft: '3px solid var(--color-accent)' }}>
       <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -15,25 +39,62 @@ function CatchUpCard({ unconfirmed, onToggle, onBail }) {
         Log these so your plan can adapt — did you do them?
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {unconfirmed.map(({ session, weekNum, idx, date }) => (
-          <div key={`${weekNum}_${idx}`} className={`sess-${session.zone}`} style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.6 }}>
-                {date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
-              </span>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{session.name}</span>
+        {asking.map(item => {
+          const { session, date } = item
+          return (
+            <div key={key(item)} className={`sess-${session.zone}`} style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.6 }}>
+                  {date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
+                </span>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{session.name}</span>
+              </div>
+              <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85, marginBottom: 10 }}>{session.desc}</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary btn-sm" onClick={() => didIt(item)}>
+                  <i className="ti ti-check" aria-hidden="true" /> Did it
+                </button>
+                <button className="btn btn-sm" onClick={() => onBail(item.weekNum, item.idx, session.zone)} style={{ color: 'var(--color-red-text)' }}>
+                  <i className="ti ti-circle-x" aria-hidden="true" /> Missed it
+                </button>
+              </div>
             </div>
-            <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85, marginBottom: 10 }}>{session.desc}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary btn-sm" onClick={() => onToggle(weekNum, idx, session.zone)}>
-                <i className="ti ti-check" aria-hidden="true" /> Did it
-              </button>
-              <button className="btn btn-sm" onClick={() => onBail(weekNum, idx, session.zone)} style={{ color: 'var(--color-red-text)' }}>
-                <i className="ti ti-circle-x" aria-hidden="true" /> Missed it
-              </button>
+          )
+        })}
+
+        {ratingItems.map(item => {
+          const { session } = item
+          return (
+            <div key={key(item)} className={`sess-${session.zone}`} style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className="ti ti-circle-check" style={{ opacity: 0.7 }} aria-hidden="true" />
+                <span style={{ textDecoration: 'line-through', opacity: 0.6 }}>{session.name}</span> — how did it feel?
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.65 }}>RPE</span>
+                {[1, 2, 3, 4, 5].map(r => (
+                  <button
+                    key={r}
+                    onClick={() => pickRPE(item, r)}
+                    style={{
+                      padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                      border: '1.5px solid var(--color-border-strong)', background: 'transparent', color: 'inherit',
+                    }}
+                  >
+                    {r}
+                  </button>
+                ))}
+                <button onClick={() => dismiss(item)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: 'var(--color-text-muted)', fontFamily: 'inherit' }}>
+                  Skip
+                </button>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 6 }}>
+                1 = {RPE_LABELS[1]} · 5 = {RPE_LABELS[5]}
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -260,12 +321,12 @@ function StravaCard({ strava }) {
   )
 }
 
-export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, onToggle, onBail, doneSessions, totalSessions, daysLeft, strava }) {
+export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, onToggle, onBail, onRPE, doneSessions, totalSessions, daysLeft, strava }) {
   const pct = totalSessions ? Math.round((doneSessions / totalSessions) * 100) : 0
 
   return (
     <div>
-      <CatchUpCard unconfirmed={unconfirmed} onToggle={onToggle} onBail={onBail} />
+      <CatchUpCard unconfirmed={unconfirmed} onToggle={onToggle} onBail={onBail} onRPE={onRPE} />
       <AdaptationBanner adaptation={adaptation} />
       <TodayCard plan={plan} sessionState={sessionState} planStart={planStart} onToggle={onToggle} onBail={onBail} />
       <StravaCard strava={strava} />

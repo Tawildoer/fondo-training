@@ -365,6 +365,30 @@ function raiseHardest(sessions) {
   return copy
 }
 
+// Scale only the *leading* duration of a session description (its overall
+// length), leaving interval prescriptions after a colon/"with" intact. Minutes
+// round to the nearest 5, hours to the nearest 0.5.
+function roundMins(m) { return Math.max(5, Math.round(m / 5) * 5) }
+function roundHrs(h) { return Math.max(0.5, Math.round(h * 2) / 2) }
+
+function scaleLeadingDuration(desc, factor) {
+  if (!desc || factor === 1) return desc
+  const range = desc.match(/^(\d+(?:\.\d+)?)\s*[–-]\s*(\d+(?:\.\d+)?)\s*(min|mins|minutes|hr|hrs|hour|hours)\b/i)
+  if (range) {
+    const isHr = range[3][0].toLowerCase() === 'h'
+    const lo = isHr ? roundHrs(+range[1] * factor) : roundMins(+range[1] * factor)
+    const hi = isHr ? roundHrs(+range[2] * factor) : roundMins(+range[2] * factor)
+    return desc.replace(range[0], `${lo}–${hi} ${isHr ? 'hr' : 'min'}`)
+  }
+  const single = desc.match(/^(\d+(?:\.\d+)?)\s*(min|mins|minutes|hr|hrs|hour|hours)\b/i)
+  if (single) {
+    const isHr = single[2][0].toLowerCase() === 'h'
+    const val = isHr ? roundHrs(+single[1] * factor) : roundMins(+single[1] * factor)
+    return desc.replace(single[0], `${val} ${isHr ? 'hr' : 'min'}`)
+  }
+  return desc
+}
+
 // Returns a new plan with upcoming weeks (num > currentWeek) adjusted per the
 // adaptation directive. Deterministic — recompute from sessionState each render.
 export function applyAdaptation(plan, adaptation, currentWeek) {
@@ -373,8 +397,13 @@ export function applyAdaptation(plan, adaptation, currentWeek) {
     if (week.num <= currentWeek) return week
     const hrs = adaptation.factor !== 1 ? Math.round(week.hrs * adaptation.factor * 2) / 2 : week.hrs
     let sessions = week.sessions
-    if (adaptation.intensity === 'soften') sessions = softenHardest(week.sessions)
-    else if (adaptation.intensity === 'raise') sessions = raiseHardest(week.sessions)
+    // Rescale each session's overall duration to track the volume change…
+    if (adaptation.factor !== 1) {
+      sessions = sessions.map(s => s.zone === 'rest' ? s : { ...s, desc: scaleLeadingDuration(s.desc, adaptation.factor) })
+    }
+    // …then soften/raise the hardest session (operates on the rescaled copy).
+    if (adaptation.intensity === 'soften') sessions = softenHardest(sessions)
+    else if (adaptation.intensity === 'raise') sessions = raiseHardest(sessions)
     if (hrs === week.hrs && sessions === week.sessions) return week
     return { ...week, hrs, sessions, adjusted: true, adjustReason: adaptation.reason }
   })
