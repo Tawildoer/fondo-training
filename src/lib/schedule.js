@@ -45,11 +45,14 @@ export function getScheduledSessions(plan, { includeRest = false, base = new Dat
   return out
 }
 
-// Sessions scheduled for today (includes rest days).
-export function getTodaySessions(plan, base = new Date()) {
-  const today = new Date(base)
+// Sessions scheduled for the actual current date (includes rest days).
+// `planStart` anchors the plan; `now` is the real-world day we're matching
+// against — they're distinct, so the card tracks today rather than the
+// plan's start date.
+export function getTodaySessions(plan, planStart = new Date(), now = new Date()) {
+  const today = new Date(now)
   today.setHours(0, 0, 0, 0)
-  return getScheduledSessions(plan, { includeRest: true, base }).filter(
+  return getScheduledSessions(plan, { includeRest: true, base: planStart }).filter(
     s => s.date.getTime() === today.getTime()
   )
 }
