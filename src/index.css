@@ -61,6 +61,14 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Paint the page background on <html> too, so iOS rubber-band overscroll and
+   the browser chrome don't reveal a different colour as you scroll. */
+html {
+  background: var(--color-bg);
+  -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
+}
+
 body {
   background: var(--color-bg);
   color: var(--color-text);
@@ -68,7 +76,17 @@ body {
   font-size: 15px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  /* Stop stray absolutely-positioned tooltips / wide rows from creating a
+     horizontal scrollbar on narrow screens. */
+  overflow-x: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
 }
+
+#root { overflow-x: hidden; }
+
+/* Media never overflows its container. */
+img, svg, video, canvas { max-width: 100%; }
 
 .app-shell {
   max-width: 900px;
@@ -78,6 +96,23 @@ body {
 
 @media (max-width: 600px) {
   .app-shell { padding: 1.25rem 1rem; }
+
+  /* Tab bar: single horizontally-scrollable row instead of an uneven
+     multi-row wrap. */
+  .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab-btn { flex: 0 0 auto; padding: 8px 13px; }
+
+  /* 16px inputs stop iOS Safari from auto-zooming (and shifting layout) on
+     focus. */
+  .field input,
+  .field select,
+  .field textarea { font-size: 16px; }
 }
 
 /* ── Cards ── */

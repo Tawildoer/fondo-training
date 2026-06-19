@@ -120,6 +120,9 @@ export default function CalendarView({ plan, sessionState, planStart, eventName 
 
           const cellToday = isToday(cell.date)
           const cellPast  = isPast(cell.date)
+          // Anchor tooltips on the right-hand columns to the right edge so
+          // they don't run off the side of a narrow (phone) screen.
+          const anchorRight = (i % 7) >= 4
 
           return (
             <div key={cell.key} style={{
@@ -182,7 +185,7 @@ export default function CalendarView({ plan, sessionState, planStart, eventName 
                       <div style={{
                         position: 'absolute',
                         top: '100%',
-                        left: 0,
+                        ...(anchorRight ? { right: 0 } : { left: 0 }),
                         zIndex: 100,
                         marginTop: 4,
                         background: 'var(--color-surface)',
