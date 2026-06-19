@@ -103,7 +103,7 @@ export default function CalendarView({ plan, sessionState, planStart, eventName 
       </div>
 
       {/* Day-of-week headers */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3, marginBottom: 3 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 3, marginBottom: 3 }}>
         {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
           <div key={d} style={{
             textAlign: 'center', fontSize: 10, fontWeight: 600,
@@ -114,7 +114,7 @@ export default function CalendarView({ plan, sessionState, planStart, eventName 
       </div>
 
       {/* Calendar grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 3 }}>
         {cells.map((cell, i) => {
           if (!cell) return <div key={i} style={{ minHeight: 72 }} />
 
@@ -155,7 +155,7 @@ export default function CalendarView({ plan, sessionState, planStart, eventName 
                 const showTip = tooltip === tooltipId
 
                 return (
-                  <div key={si} style={{ position: 'relative' }}>
+                  <div key={si} style={{ position: 'relative', minWidth: 0 }}>
                     <div
                       role="button"
                       tabIndex={0}
