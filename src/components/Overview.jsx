@@ -294,10 +294,13 @@ function VolumeChart({ plan }) {
                 <div style={{
                   width: '100%',
                   height: '100%',
-                  background: color,
-                  borderRadius: '2px 2px 0 0',
-                  opacity: isHov ? 0.75 : 1,
+                  background: `linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0) 50%), ${color}`,
+                  borderRadius: '3px 3px 0 0',
+                  opacity: isHov ? 0.8 : 1,
                   transition: 'opacity 0.1s',
+                  transformOrigin: 'bottom',
+                  animation: `bar-grow 0.55s cubic-bezier(0.2,0.7,0.3,1) both`,
+                  animationDelay: `${i * 28}ms`,
                 }} />
               </div>
             )
@@ -387,6 +390,11 @@ function TrainingLoadCard({ plan, sessionState, activities, user, planStart }) {
   const xAt = i => n === 1 ? W / 2 : padL + (i / (n - 1)) * (W - padL - padR)
   const yAt = v => padT + (1 - v / maxY) * (H - padT - padB)
   const pathFor = key => series.map((s, i) => `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(s[key]).toFixed(1)}`).join(' ')
+  const areaFor = key => {
+    if (!n) return ''
+    const baseY = (H - padB).toFixed(1)
+    return `${pathFor(key)} L ${xAt(n - 1).toFixed(1)} ${baseY} L ${xAt(0).toFixed(1)} ${baseY} Z`
+  }
   const fmt = d => new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
   const form = formMeta(current.tsb)
 
@@ -413,6 +421,13 @@ function TrainingLoadCard({ plan, sessionState, activities, user, planStart }) {
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="ctlFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.38" />
+            <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={areaFor('ctl')} fill="url(#ctlFill)" stroke="none" />
         <path d={pathFor('ctl')} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         <path d={pathFor('atl')} fill="none" stroke="var(--color-amber-text)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="3 3" />
         {n > 0 && (
@@ -463,8 +478,8 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
           <span>Overall progress</span><span>{pct}%</span>
         </div>
-        <div style={{ height: 6, background: 'var(--color-surface2)', borderRadius: 3, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${pct}%`, background: 'var(--color-accent)', borderRadius: 3, transition: 'width 0.5s' }} />
+        <div className="progress-track">
+          <div className="progress-fill" style={{ width: `${pct}%` }} />
         </div>
       </div>
 
