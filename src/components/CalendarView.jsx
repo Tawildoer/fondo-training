@@ -96,7 +96,7 @@ export default function CalendarView({ plan, sessionState, planStart, eventName 
         <button className="btn btn-sm" onClick={prevMonth} aria-label="Previous month">
           <i className="ti ti-chevron-left" aria-hidden="true" />
         </button>
-        <span style={{ fontWeight: 600, fontSize: 15 }}>{monthLabel}</span>
+        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, letterSpacing: '-0.01em' }}>{monthLabel}</span>
         <button className="btn btn-sm" onClick={nextMonth} aria-label="Next month">
           <i className="ti ti-chevron-right" aria-hidden="true" />
         </button>
@@ -125,7 +125,7 @@ export default function CalendarView({ plan, sessionState, planStart, eventName 
           const anchorRight = (i % 7) >= 4
 
           return (
-            <div key={cell.key} style={{
+            <div key={cell.key} className={`cal-cell${cellToday ? ' cal-today' : ''}`} style={{
               minHeight: 72,
               borderRadius: 'var(--radius-sm)',
               padding: '5px 4px',

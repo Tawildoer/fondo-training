@@ -22,6 +22,7 @@ function FtpChart({ history }) {
 
   const points = history.map((h, i) => ({ x: xAt(i), y: yAt(h.ftp), ftp: h.ftp, date: new Date(h.recorded_at) }))
   const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
+  const areaPath = n > 1 ? `${linePath} L ${xAt(n - 1).toFixed(1)} ${(H - padB).toFixed(1)} L ${xAt(0).toFixed(1)} ${(H - padB).toFixed(1)} Z` : ''
 
   const first = history[0]
   const last = history[history.length - 1]
@@ -31,7 +32,7 @@ function FtpChart({ history }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em' }}>{last.ftp}W</span>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', fontWeight: 700, letterSpacing: '-0.03em' }}>{last.ftp}W</span>
         {n > 1 && (
           <span style={{
             fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
@@ -43,6 +44,13 @@ function FtpChart({ history }) {
         )}
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="ftpFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.34" />
+            <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {n > 1 && <path d={areaPath} fill="url(#ftpFill)" stroke="none" />}
         {n > 1 && <path d={linePath} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
         {points.map((p, i) => (
           <g key={i}>
@@ -62,7 +70,7 @@ function FtpChart({ history }) {
 
 function ZoneTable({ columns, rows }) {
   return (
-    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+    <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
       <thead>
         <tr>
           {columns.map(col => (

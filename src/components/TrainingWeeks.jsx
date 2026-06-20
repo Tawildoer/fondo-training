@@ -118,6 +118,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
         return (
           <div key={week.num} className="card" style={{ padding: 0, overflow: 'hidden' }}>
             <button
+              className="week-header"
               onClick={() => toggleWeek(week.num)}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 12,
@@ -129,7 +130,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
               <ProgressRing done={doneCount} total={activeSessions.length} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 600, fontSize: 14 }}>Week {week.num}</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, letterSpacing: '-0.01em' }}>Week {week.num}</span>
                   <span className={`tag tag-${phaseTag}`}>
                     {week.isRecovery ? 'Recovery week' : week.phaseLabel}
                   </span>
@@ -169,7 +170,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                     const matchedActivity = isRest ? null : matchActivityToDate(activities, getSessionDate(week.num, session, idx, planStart))
 
                     return (
-                      <div key={idx} className={`sess-${session.zone}`}
+                      <div key={idx} className={`sess-${session.zone} sess-row`}
                         style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px', opacity: bailed ? 0.6 : 1 }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                           <div style={{ paddingTop: 2, width: 18, flexShrink: 0 }}>
