@@ -28,6 +28,13 @@
   --color-teal: #0F6E56;
   --color-teal-light: #E1F5EE;
   --color-teal-text: #085041;
+  /* Electric brand layer */
+  --color-electric: #FFD23F;       /* the logo bolt */
+  --color-violet: #7C6FF0;
+  --grad-hero: linear-gradient(135deg, #185FA5 0%, #3A3D9E 55%, #6B4FB8 100%);
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.28), 0 6px 18px rgba(0,0,0,0.18);
+  --shadow-card-hover: 0 2px 6px rgba(0,0,0,0.30), 0 12px 28px rgba(0,0,0,0.24);
+  --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
   --radius: 10px;
   --radius-sm: 6px;
 }
@@ -95,6 +102,93 @@ img, svg, video, canvas { max-width: 100%; }
   padding: 2rem 1.5rem;
 }
 
+/* ── Hero header ── */
+.hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--grad-hero);
+  border-radius: var(--radius);
+  padding: 1.5rem 1.6rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow-card);
+  color: #fff;
+}
+/* Electric glow blob in the corner */
+.hero::after {
+  content: '';
+  position: absolute;
+  top: -50px; right: -30px;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(255,210,63,0.28), transparent 70%);
+  pointer-events: none;
+}
+.hero > * { position: relative; z-index: 1; }
+.hero-title {
+  font-family: var(--font-display);
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+  color: #fff;
+}
+.hero-sub {
+  font-size: 13px;
+  color: rgba(255,255,255,0.82);
+  margin-top: 5px;
+}
+.hero-streak {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 12px;
+  padding: 4px 11px;
+  border-radius: 20px;
+  background: rgba(0,0,0,0.22);
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+.hero-side { display: flex; gap: 8px; align-items: flex-start; flex-shrink: 0; }
+.hero-countdown {
+  text-align: right;
+  padding: 9px 15px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+}
+.hero-countdown .num {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-electric);
+}
+.hero-countdown .lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.78);
+  margin-top: 2px;
+}
+.hero-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.hero-btn:hover { background: rgba(255,255,255,0.22); }
+
 @media (max-width: 600px) {
   .app-shell { padding: 1.25rem 1rem; }
 
@@ -123,6 +217,12 @@ img, svg, video, canvas { max-width: 100%; }
   border-radius: var(--radius);
   padding: 1.25rem;
   margin-bottom: 1rem;
+  box-shadow: var(--shadow-card);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
 }
 .card h2 {
   font-size: 12px;
@@ -236,12 +336,26 @@ img, svg, video, canvas { max-width: 100%; }
   margin-bottom: 1.5rem;
 }
 .stat-card {
-  background: var(--color-surface2);
+  background: var(--color-surface);
+  border: 0.5px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
   border-radius: var(--radius-sm);
-  padding: 12px 14px;
+  padding: 13px 16px;
+  box-shadow: var(--shadow-card);
 }
-.stat-card .val { font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em; }
-.stat-card .lbl { font-size: 11px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+.stat-card .val {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.stat-card .lbl { font-size: 11px; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 3px; }
+/* Rotate accent spines so the row reads with rhythm, not one flat colour. */
+.stats-grid .stat-card:nth-child(4n+1) { border-left-color: var(--color-accent); }
+.stats-grid .stat-card:nth-child(4n+2) { border-left-color: var(--color-electric); }
+.stats-grid .stat-card:nth-child(4n+3) { border-left-color: var(--color-violet); }
+.stats-grid .stat-card:nth-child(4n+4) { border-left-color: var(--color-teal); }
 
 /* ── Zone colours ── */
 .sess-z1 { background: var(--color-green-light); color: var(--color-green-text); }

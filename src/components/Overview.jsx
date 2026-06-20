@@ -121,7 +121,7 @@ function StreakCard({ streak }) {
       }} aria-hidden="true">🔥</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.03em', color: hot ? 'var(--color-coral-text)' : 'var(--color-text)' }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', fontWeight: 700, letterSpacing: '-0.03em', color: hot ? 'var(--color-coral-text)' : 'var(--color-text)' }}>
             {current}
           </span>
           <span style={{ fontSize: 13, fontWeight: 600, color: hot ? 'var(--color-coral-text)' : 'var(--color-text-muted)' }}>
@@ -396,16 +396,16 @@ function TrainingLoadCard({ plan, sessionState, activities, user, planStart }) {
 
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--color-accent-text)' }}>{current.ctl}</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.7rem', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--color-accent-text)' }}>{current.ctl}</div>
           <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fitness (CTL)</div>
         </div>
         <div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--color-amber-text)' }}>{current.atl}</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.7rem', fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--color-amber-text)' }}>{current.atl}</div>
           <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Fatigue (ATL)</div>
         </div>
         <div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em' }}>{current.tsb > 0 ? '+' : ''}{current.tsb}</span>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.7rem', fontWeight: 700, letterSpacing: '-0.03em' }}>{current.tsb > 0 ? '+' : ''}{current.tsb}</span>
             <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: form.bg, color: form.color }}>{form.label}</span>
           </div>
           <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Form (TSB)</div>

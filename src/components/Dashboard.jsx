@@ -224,24 +224,25 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
 
   return (
     <div className="app-shell">
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-        <div>
-          <h1 style={{ fontSize: '1.4rem', fontWeight: 600, letterSpacing: '-0.02em' }}>
-            {user.event_name || 'Training Plan'}
-          </h1>
-          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginTop: 2 }}>
-            {user.name} · {user.event_distance_km ? `${user.event_distance_km}km` : ''} {user.event_date ? `· ${new Date(user.event_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+      {/* Hero header */}
+      <div className="hero">
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h1 className="hero-title">{user.event_name || 'Training Plan'}</h1>
+          <p className="hero-sub">
+            {user.name}{user.event_distance_km ? ` · ${user.event_distance_km}km` : ''}{user.event_date ? ` · ${new Date(user.event_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
           </p>
+          {streak?.current > 0 && (
+            <span className="hero-streak"><span aria-hidden="true">🔥</span> {streak.current} session{streak.current === 1 ? '' : 's'} in a row</span>
+          )}
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        <div className="hero-side">
           {daysLeft !== null && (
-            <div style={{ background: 'var(--color-accent-light)', borderRadius: 'var(--radius-sm)', padding: '8px 14px', textAlign: 'right' }}>
-              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-accent-text)', lineHeight: 1 }}>{daysLeft}</div>
-              <div style={{ fontSize: 10, color: 'var(--color-accent-text)', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>days left</div>
+            <div className="hero-countdown">
+              <div className="num">{daysLeft}</div>
+              <div className="lbl">days left</div>
             </div>
           )}
-          <button className="btn btn-sm" onClick={onLogout} title="Switch user">
+          <button className="hero-btn" onClick={onLogout} title="Switch user" aria-label="Switch user">
             <i className="ti ti-logout" aria-hidden="true" />
           </button>
         </div>
