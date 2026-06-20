@@ -32,8 +32,10 @@
   --radius-sm: 6px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+/* Always use the dark "moody" palette, regardless of the OS light/dark
+   setting. These override the light defaults above. */
+:root {
+    color-scheme: dark;
     --color-bg: #1a1917;
     --color-surface: #242320;
     --color-surface2: #2c2c29;
@@ -56,7 +58,6 @@
     --color-coral-text: #F5C4B3;
     --color-teal-light: #085041;
     --color-teal-text: #9FE1CB;
-  }
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
