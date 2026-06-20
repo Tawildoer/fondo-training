@@ -39,6 +39,7 @@ create table session_state (
   session_idx int not null,
   completed boolean default false,
   bailed boolean default false,    -- explicitly marked missed / bailed on
+  auto_completed boolean default false, -- completed automatically from a matched Strava ride
   rpe int check (rpe between 1 and 5),
   notes text,
   completed_at timestamptz,
@@ -47,6 +48,7 @@ create table session_state (
 );
 -- Migration for existing databases (safe to re-run):
 --   alter table session_state add column if not exists bailed boolean default false;
+--   alter table session_state add column if not exists auto_completed boolean default false;
 
 -- 2b. FTP history (one row per logged FTP update)
 create table ftp_history (

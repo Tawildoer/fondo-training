@@ -195,6 +195,12 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                               {state.completed && !isRest && (
                                 <i className="ti ti-circle-check" style={{ fontSize: 14, opacity: 0.7 }} aria-hidden="true" />
                               )}
+                              {state.completed && state.auto_completed && !isRest && (
+                                <span className="tag" style={{ background: 'var(--color-accent-light)', color: 'var(--color-accent-text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                  title="Auto-completed from a matched Strava ride">
+                                  <i className="ti ti-brand-strava" style={{ fontSize: 12 }} aria-hidden="true" /> From Strava
+                                </span>
+                              )}
                               {bailed && (
                                 <span className="tag" style={{ background: 'var(--color-red-light)', color: 'var(--color-red-text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                   <i className="ti ti-circle-x" style={{ fontSize: 12 }} aria-hidden="true" /> Missed

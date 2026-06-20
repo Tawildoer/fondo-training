@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { generatePlan, computeAdaptation, applyAdaptation } from '../lib/planGenerator'
 import { getPlanStart, getCurrentWeekNum, getUnconfirmedSessions, localDateStr } from '../lib/schedule'
 import { loadSessionState, upsertSessionState, loadAdjustments, addAdjustment, deleteAdjustment, updateUser, loadFtpHistory, addFtpEntry, getStravaAccount, loadActivities } from '../lib/supabase'
-import { syncStrava, getStravaAuthUrl, stravaConfigured } from '../lib/strava'
+import { syncStrava, getStravaAuthUrl, stravaConfigured, getStravaAutoCompletions } from '../lib/strava'
 import TrainingWeeks from './TrainingWeeks'
 import PowerZones from './PowerZones'
 import Adjustments from './Adjustments'
@@ -53,7 +53,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
       const stateMap = {}
       sessions.forEach(s => {
         const key = `w${s.week_num}_${s.session_idx}`
-        stateMap[key] = { completed: s.completed, bailed: s.bailed, rpe: s.rpe, notes: s.notes, zone: null }
+        stateMap[key] = { completed: s.completed, bailed: s.bailed, auto_completed: s.auto_completed, rpe: s.rpe, notes: s.notes, zone: null }
       })
       setSessionState(stateMap)
       setAdjustments(adjs)
@@ -96,8 +96,10 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     const newCompleted = !current.completed
     const now = newCompleted ? new Date().toISOString() : null
     // Completing a session clears any "bailed" mark — they're mutually exclusive.
-    setSessionState(prev => ({ ...prev, [key]: { ...prev[key], completed: newCompleted, bailed: newCompleted ? false : prev[key]?.bailed, zone } }))
-    await upsertSessionState(user.id, weekNum, idx, { completed: newCompleted, completed_at: now, ...(newCompleted ? { bailed: false } : {}) })
+    // A manual complete also clears the "auto from Strava" flag; un-checking
+    // keeps it sticky so the auto-completer won't re-tick it.
+    setSessionState(prev => ({ ...prev, [key]: { ...prev[key], completed: newCompleted, bailed: newCompleted ? false : prev[key]?.bailed, auto_completed: newCompleted ? false : prev[key]?.auto_completed, zone } }))
+    await upsertSessionState(user.id, weekNum, idx, { completed: newCompleted, completed_at: now, ...(newCompleted ? { bailed: false, auto_completed: false } : {}) })
   }, [sessionState, user.id])
 
   const bailSession = useCallback(async (weekNum, idx, zone) => {
@@ -179,6 +181,27 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     () => getUnconfirmedSessions(adjustedPlan, sessionState, planStart),
     [adjustedPlan, sessionState, planStart]
   )
+
+  // Auto-complete past sessions that have a matching Strava ride. Self-
+  // terminating: completed sessions are skipped, and `auto_completed` is sticky
+  // so a session the user un-checks is never re-completed. Uses the base `plan`
+  // (only future weeks differ in adjustedPlan; past sessions are identical).
+  useEffect(() => {
+    if (loading) return
+    const todo = getStravaAutoCompletions(plan, sessionState, activities, planStart)
+    if (!todo.length) return
+    setSessionState(prev => {
+      const next = { ...prev }
+      todo.forEach(({ weekNum, idx, zone }) => {
+        const key = `w${weekNum}_${idx}`
+        next[key] = { ...next[key], completed: true, bailed: false, auto_completed: true, zone }
+      })
+      return next
+    })
+    todo.forEach(({ weekNum, idx, completedAt }) =>
+      upsertSessionState(user.id, weekNum, idx, { completed: true, bailed: false, auto_completed: true, completed_at: completedAt })
+    )
+  }, [loading, plan, activities, planStart, sessionState, user.id])
 
   const totalSessions = adjustedPlan.reduce((a, w) => a + w.sessions.filter(s => s.zone !== 'rest').length, 0)
   const doneSessions = Object.values(sessionState).filter(s => s?.completed).length

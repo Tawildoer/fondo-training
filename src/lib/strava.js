@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { getScheduledSessions } from './schedule'
 
 const CLIENT_ID = import.meta.env.VITE_STRAVA_CLIENT_ID
 
@@ -49,4 +50,24 @@ export function matchActivityToDate(activities, date) {
   if (!date) return null
   const key = localKey(date)
   return activities.find(a => a.start_date && a.start_date.slice(0, 10) === key) || null
+}
+
+// Non-rest sessions on or before today that have a matching Strava ride and
+// haven't been completed, bailed, or auto-completed before. Each entry is a
+// session to mark complete from the ride, with the ride's timestamp.
+// `auto_completed` is sticky: once we've auto-acted on a session we never do
+// it again, so a user un-checking it stays un-checked.
+export function getStravaAutoCompletions(plan, sessionState, activities, planStart, now = new Date()) {
+  if (!activities?.length) return []
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  const out = []
+  getScheduledSessions(plan, { base: planStart }).forEach(({ session, date, weekNum, idx }) => {
+    if (date.getTime() > today.getTime()) return // can't have ridden a future day
+    const st = sessionState[`w${weekNum}_${idx}`] || {}
+    if (st.completed || st.bailed || st.auto_completed) return
+    const act = matchActivityToDate(activities, date)
+    if (act) out.push({ weekNum, idx, zone: session.zone, completedAt: act.start_date })
+  })
+  return out
 }
