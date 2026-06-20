@@ -101,6 +101,43 @@ function CatchUpCard({ unconfirmed, onToggle, onBail, onRPE }) {
   )
 }
 
+function StreakCard({ streak }) {
+  const current = streak?.current || 0
+  const best = streak?.best || 0
+  if (!current && !best) return null
+
+  const hot = current > 0
+  return (
+    <div className="card" style={{
+      display: 'flex', alignItems: 'center', gap: 14,
+      background: hot
+        ? 'linear-gradient(135deg, var(--color-amber-light), var(--color-coral-light))'
+        : 'var(--color-surface)',
+      border: hot ? '0.5px solid var(--color-amber)' : '0.5px solid var(--color-border)',
+    }}>
+      <div style={{
+        fontSize: 30, lineHeight: 1, flexShrink: 0,
+        filter: hot ? 'none' : 'grayscale(1) opacity(0.5)',
+      }} aria-hidden="true">🔥</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.03em', color: hot ? 'var(--color-coral-text)' : 'var(--color-text)' }}>
+            {current}
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: hot ? 'var(--color-coral-text)' : 'var(--color-text-muted)' }}>
+            session{current === 1 ? '' : 's'} in a row
+          </span>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
+          {current > 0
+            ? (current >= best ? "That's your best run yet — keep it alive!" : `Best streak: ${best}`)
+            : `Complete your next session to start a new streak · Best: ${best}`}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AdaptationBanner({ adaptation }) {
   if (!adaptation) return null
   return (
@@ -403,7 +440,7 @@ function TrainingLoadCard({ plan, sessionState, activities, user, planStart }) {
   )
 }
 
-export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], onToggle, onBail, onRPE, doneSessions, totalSessions, daysLeft, strava }) {
+export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], streak, onToggle, onBail, onRPE, doneSessions, totalSessions, daysLeft, strava }) {
   const pct = totalSessions ? Math.round((doneSessions / totalSessions) * 100) : 0
 
   return (
@@ -411,6 +448,7 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
       <CatchUpCard unconfirmed={unconfirmed} onToggle={onToggle} onBail={onBail} onRPE={onRPE} />
       <AdaptationBanner adaptation={adaptation} />
       <TodayCard plan={plan} sessionState={sessionState} planStart={planStart} onToggle={onToggle} onBail={onBail} />
+      <StreakCard streak={streak} />
       <StravaCard strava={strava} />
 
       <div className="stats-grid">

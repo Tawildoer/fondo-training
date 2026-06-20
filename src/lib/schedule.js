@@ -102,6 +102,35 @@ export function getUnconfirmedSessions(plan, sessionState, planStart, base = new
     .sort((a, b) => a.date - b.date)
 }
 
+// ── Streak ───────────────────────────────────────────────────
+// Consecutive completed non-rest sessions, in date order, up to today.
+// Only an explicit bail breaks a streak — pending (unconfirmed) sessions are
+// ignored, matching the app's "a miss only counts when denied" rule, so
+// forgetting to log today doesn't nuke your run. Returns { current, best }.
+export function computeStreak(plan, sessionState, planStart = new Date(), now = new Date()) {
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  const resolved = getScheduledSessions(plan, { base: planStart })
+    .filter(s => s.date.getTime() <= today.getTime())
+    .sort((a, b) => a.date - b.date)
+    .map(s => sessionState[`w${s.weekNum}_${s.idx}`] || {})
+    .filter(st => st.completed || st.bailed) // drop pending + rest
+
+  let current = 0
+  for (let i = resolved.length - 1; i >= 0; i--) {
+    if (resolved[i].completed) current++
+    else break // hit a bail
+  }
+
+  let best = 0, run = 0
+  resolved.forEach(st => {
+    if (st.completed) { run++; best = Math.max(best, run) }
+    else run = 0
+  })
+
+  return { current, best }
+}
+
 // ── .ics export ──────────────────────────────────────────────
 
 function pad(n) { return String(n).padStart(2, '0') }

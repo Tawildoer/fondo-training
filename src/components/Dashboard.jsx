@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { generatePlan, computeAdaptation, applyAdaptation } from '../lib/planGenerator'
-import { getPlanStart, getCurrentWeekNum, getUnconfirmedSessions, localDateStr } from '../lib/schedule'
+import { getPlanStart, getCurrentWeekNum, getUnconfirmedSessions, computeStreak, localDateStr } from '../lib/schedule'
+import { celebrate } from '../lib/celebrate'
 import { loadSessionState, upsertSessionState, loadAdjustments, addAdjustment, deleteAdjustment, updateUser, loadFtpHistory, addFtpEntry, getStravaAccount, loadActivities } from '../lib/supabase'
 import { syncStrava, getStravaAuthUrl, stravaConfigured, getStravaAutoCompletions } from '../lib/strava'
 import TrainingWeeks from './TrainingWeeks'
@@ -99,6 +100,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     // A manual complete also clears the "auto from Strava" flag; un-checking
     // keeps it sticky so the auto-completer won't re-tick it.
     setSessionState(prev => ({ ...prev, [key]: { ...prev[key], completed: newCompleted, bailed: newCompleted ? false : prev[key]?.bailed, auto_completed: newCompleted ? false : prev[key]?.auto_completed, zone } }))
+    if (newCompleted) celebrate()
     await upsertSessionState(user.id, weekNum, idx, { completed: newCompleted, completed_at: now, ...(newCompleted ? { bailed: false, auto_completed: false } : {}) })
   }, [sessionState, user.id])
 
@@ -203,6 +205,11 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     )
   }, [loading, plan, activities, planStart, sessionState, user.id])
 
+  const streak = useMemo(
+    () => computeStreak(plan, sessionState, planStart),
+    [plan, sessionState, planStart]
+  )
+
   const totalSessions = adjustedPlan.reduce((a, w) => a + w.sessions.filter(s => s.zone !== 'rest').length, 0)
   const doneSessions = Object.values(sessionState).filter(s => s?.completed).length
 
@@ -254,7 +261,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
         </div>
       ) : (
         <>
-          {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} activities={activities} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
+          {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} activities={activities} streak={streak} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
             strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }} />}
           {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={user.event_name} />}
           {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} user={user} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} />}
