@@ -112,7 +112,13 @@ function AdaptationBanner({ adaptation }) {
 }
 
 function TodayCard({ plan, sessionState, planStart, onToggle, onBail }) {
-  const todays = getTodaySessions(plan, planStart)
+  // Drop sessions once they're completed or bailed so the card clears itself —
+  // rest days stay (nothing to action) until the day rolls over.
+  const todays = getTodaySessions(plan, planStart).filter(({ session, weekNum, idx }) => {
+    if (session.zone === 'rest') return true
+    const st = sessionState[`w${weekNum}_${idx}`] || {}
+    return !st.completed && !st.bailed
+  })
   const dateLabel = new Date().toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })
 
   if (!todays.length) return null
