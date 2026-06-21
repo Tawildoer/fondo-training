@@ -9,7 +9,7 @@
 // (calendar, streak, training load, Strava auto-complete) just works.
 
 import { getZoneLabel } from './planGenerator'
-import { nextEvent, prevEvent, parseLocalDate } from './schedule'
+import { nextEvent, prevEvent, parseLocalDate, localDateStr } from './schedule'
 
 const ZONE_IF = { z1: 0.45, z2: 0.65, z3: 0.83, z4: 0.98, z5: 1.13 }
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -260,17 +260,24 @@ function mondayOfPlanWeek(planStart, weekNum) {
   return mondayOfDate(d)
 }
 
+// Daily CTL projection so the curve is smooth and each event's load lands on
+// its actual day (not smeared across the week). Returns one point per day.
 export function projectLoad({ currentCtl = 0, recentWeeklyTss = 0, planStart, currentWeekNum = 1, events = [], user = {}, plannedWeeks = [] }) {
   const goal = user.fitness_goal || 'build'
   const weeklyHoursStart = user.weekly_hours_start || 0
   const daysPerWeek = user.days_per_week || 5
+  const DAY = 86400000
 
-  const evDates = (events || []).map(e => parseLocalDate(e.date)).filter(Boolean).sort((a, b) => a - b)
+  const evParsed = (events || []).map(e => ({ ...e, _date: parseLocalDate(e.date) })).filter(e => e._date)
   let horizon = 12
-  if (evDates.length) {
-    const wk = Math.round((mondayOfDate(evDates[evDates.length - 1]) - mondayOfPlanWeek(planStart, currentWeekNum)) / (7 * 86400000))
+  if (evParsed.length) {
+    const last = evParsed.map(e => e._date).sort((a, b) => a - b).pop()
+    const wk = Math.round((mondayOfDate(last) - mondayOfPlanWeek(planStart, currentWeekNum)) / (7 * DAY))
     horizon = clamp(wk + 2, 4, 52)
   }
+  // Event TSS keyed by day (the big one-off race stimulus, on the real date).
+  const eventTssByKey = {}
+  evParsed.forEach(e => { const k = localDateStr(e._date); eventTssByKey[k] = (eventTssByKey[k] || 0) + estimateEventTss(e) })
 
   const plannedByNum = {}
   ;(plannedWeeks || []).forEach(w => { plannedByNum[w.week_num] = w })
@@ -282,27 +289,26 @@ export function projectLoad({ currentCtl = 0, recentWeeklyTss = 0, planStart, cu
     const weekNum = currentWeekNum + i
     const weekStart = mondayOfPlanWeek(planStart, weekNum)
     const ev = nextEvent(events, weekStart)
-    const weeksToEvent = ev?._date ? Math.max(0, Math.round((mondayOfDate(ev._date) - weekStart) / (7 * 86400000))) : null
+    const weeksToEvent = ev?._date ? Math.max(0, Math.round((mondayOfDate(ev._date) - weekStart) / (7 * DAY))) : null
     const pe = prevEvent(events, weekStart)
-    const weeksSinceEvent = pe?._date ? Math.max(0, Math.round((weekStart - mondayOfDate(pe._date)) / (7 * 86400000))) : null
-    let tss, planned = false
+    const weeksSinceEvent = pe?._date ? Math.max(0, Math.round((weekStart - mondayOfDate(pe._date)) / (7 * DAY))) : null
+    let trainingTss, planned = false
     if (plannedByNum[weekNum]) {
-      tss = weekTss(plannedByNum[weekNum].sessions); planned = true
+      trainingTss = weekTss(plannedByNum[weekNum].sessions); planned = true
     } else {
-      tss = computeWeekTarget(
+      trainingTss = computeWeekTarget(
         { goal, freshness: 3, focus: 'none', busy: false },
         { currentTsb: null, recentWeeklyTss: prevTss, weeklyHoursStart, daysPerWeek, weeksToEvent, weeksSinceEvent, weekNum }
       ).targetTss
     }
-    // The event itself adds a big one-off load on its week (so CTL bumps up at
-    // the race). Kept separate from `tss` so it doesn't inflate the rebuild.
-    const weekEnd = new Date(weekStart.getTime() + 7 * 86400000)
-    const evThisWeek = (events || []).find(e => { const d = parseLocalDate(e.date); return d && d >= weekStart && d < weekEnd })
-    const eventTss = evThisWeek ? estimateEventTss(evThisWeek) : 0
-    const daily = (tss + eventTss) / 7
-    for (let d = 0; d < 7; d++) ctl += (daily - ctl) / 42
-    series.push({ weekNum, weekStart, tss, ctl: Math.round(ctl), planned, eventTss })
-    prevTss = tss
+    const dailyTraining = trainingTss / 7
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(weekStart.getTime() + d * DAY)
+      const evTss = eventTssByKey[localDateStr(day)] || 0 // event load on its real day only
+      ctl += ((dailyTraining + evTss) - ctl) / 42
+      series.push({ date: day, ctl: Math.round(ctl), planned })
+    }
+    prevTss = trainingTss
   }
   return series
 }

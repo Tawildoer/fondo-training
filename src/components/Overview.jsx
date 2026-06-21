@@ -259,7 +259,7 @@ function ProjectionChart({ series, events }) {
   const markers = (events || []).map(e => {
     const d = parseLocalDate(e.date)
     if (!d) return null
-    const idx = series.findIndex(s => d >= s.weekStart && d < new Date(s.weekStart.getTime() + 7 * 86400000))
+    const idx = series.findIndex(s => s.date.toDateString() === d.toDateString())
     return idx < 0 ? null : { x: xAt(idx), name: e.name || 'Event' }
   }).filter(Boolean)
 
@@ -286,8 +286,8 @@ function ProjectionChart({ series, events }) {
         ))}
         {solidPath && <path d={solidPath} fill="none" stroke="var(--color-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
         <path d={dashedPath} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={lastPlanned >= 0 ? '4 3' : '0'} opacity={lastPlanned >= 0 ? 0.85 : 1} />
-        <text x={padL} y={H - 4} textAnchor="start" fontSize="8" fill="var(--color-text-faint)">{fmt(series[0].weekStart)}</text>
-        <text x={W - padR} y={H - 4} textAnchor="end" fontSize="8" fill="var(--color-text-faint)">{fmt(series[n - 1].weekStart)}</text>
+        <text x={padL} y={H - 4} textAnchor="start" fontSize="8" fill="var(--color-text-faint)">{fmt(series[0].date)}</text>
+        <text x={W - padR} y={H - 4} textAnchor="end" fontSize="8" fill="var(--color-text-faint)">{fmt(series[n - 1].date)}</text>
       </svg>
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, fontSize: 11, color: 'var(--color-text-muted)' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 2, background: 'var(--color-accent)', display: 'inline-block' }} /> Planned</span>
