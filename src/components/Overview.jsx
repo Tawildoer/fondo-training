@@ -12,8 +12,6 @@ function thisWeekRange(now = new Date()) {
   return [mon, sun]
 }
 
-const PHASE_COLORS = { base: '#378ADD', build: '#639922', 'race-prep': '#534AB7', taper: '#EF9F27', recovery: '#888780' }
-const CHART_H = 150
 
 function CatchUpCard({ unconfirmed, onToggle, onBail, onRPE }) {
   // Sessions just confirmed "Did it" are retained locally so the user can rate
@@ -119,10 +117,9 @@ function StreakCard({ streak }) {
   return (
     <div className="card" style={{
       display: 'flex', alignItems: 'center', gap: 14,
-      background: hot
-        ? 'linear-gradient(135deg, var(--color-amber-light), var(--color-coral-light))'
-        : 'var(--color-surface)',
-      border: hot ? '0.5px solid var(--color-amber)' : '0.5px solid var(--color-border)',
+      background: hot ? 'var(--grad-hero)' : 'var(--color-surface)',
+      border: hot ? 'none' : '0.5px solid var(--color-border)',
+      color: hot ? '#fff' : 'inherit',
     }}>
       <div style={{
         fontSize: 30, lineHeight: 1, flexShrink: 0,
@@ -130,14 +127,14 @@ function StreakCard({ streak }) {
       }} aria-hidden="true">🔥</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', fontWeight: 700, letterSpacing: '-0.03em', color: hot ? 'var(--color-coral-text)' : 'var(--color-text)' }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', fontWeight: 700, letterSpacing: '-0.03em', color: hot ? 'var(--color-electric)' : 'var(--color-text)' }}>
             {current}
           </span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: hot ? 'var(--color-coral-text)' : 'var(--color-text-muted)' }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: hot ? '#fff' : 'var(--color-text-muted)' }}>
             session{current === 1 ? '' : 's'} in a row
           </span>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>
+        <div style={{ fontSize: 11, color: hot ? 'rgba(255,255,255,0.85)' : 'var(--color-text-muted)', marginTop: 2 }}>
           {current > 0
             ? (current >= best ? "That's your best run yet — keep it alive!" : `Best streak: ${best}`)
             : `Complete your next session to start a new streak · Best: ${best}`}
@@ -297,116 +294,6 @@ function ProjectionChart({ series, events }) {
       <p style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 8, lineHeight: 1.5 }}>
         Where your fitness heads if you keep planning toward your {events?.length ? 'events' : 'goal'} — locked weeks solid, future weeks estimated.
       </p>
-    </div>
-  )
-}
-
-function VolumeChart({ plan }) {
-  const [hovered, setHovered] = useState(null)
-  const maxHrs = Math.max(...plan.map(w => w.hrs || 0), 1)
-  const midHrs = Math.round(maxHrs / 2)
-
-  return (
-    <div style={{ display: 'flex', gap: 0 }}>
-      {/* Y-axis labels */}
-      <div style={{ width: 28, flexShrink: 0, position: 'relative', height: CHART_H + 20 }}>
-        {[maxHrs, midHrs, 0].map(v => (
-          <div key={v} style={{
-            position: 'absolute',
-            bottom: (v / maxHrs) * CHART_H + 20,
-            right: 4,
-            fontSize: 9,
-            color: 'var(--color-text-faint)',
-            lineHeight: 1,
-            transform: 'translateY(50%)',
-          }}>
-            {v}h
-          </div>
-        ))}
-      </div>
-
-      {/* Chart area */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        {/* Gridlines */}
-        {[maxHrs, midHrs].map(v => (
-          <div key={v} style={{
-            position: 'absolute',
-            left: 0, right: 0,
-            bottom: (v / maxHrs) * CHART_H + 20,
-            borderTop: '1px solid rgba(128,128,128,0.12)',
-            pointerEvents: 'none',
-          }} />
-        ))}
-
-        {/* Bars */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: CHART_H }}>
-          {plan.map((week, i) => {
-            const hrs = week.hrs || 0
-            const barH = hrs > 0 ? Math.max((hrs / maxHrs) * CHART_H, 3) : 3
-            const color = PHASE_COLORS[week.isRecovery ? 'recovery' : week.phase] || '#888'
-            const isHov = hovered === i
-
-            return (
-              <div
-                key={week.num}
-                style={{ flex: 1, height: barH, position: 'relative', cursor: 'default' }}
-                onMouseEnter={() => setHovered(i)}
-                onMouseLeave={() => setHovered(null)}
-              >
-                {isHov && (
-                  <div style={{
-                    position: 'absolute',
-                    bottom: '100%',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    marginBottom: 6,
-                    background: 'var(--color-surface)',
-                    border: '0.5px solid var(--color-border-strong)',
-                    borderRadius: 4,
-                    padding: '5px 9px',
-                    fontSize: 11,
-                    whiteSpace: 'nowrap',
-                    zIndex: 10,
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-                    color: 'var(--color-text)',
-                    pointerEvents: 'none',
-                  }}>
-                    <strong>W{week.num}</strong> · {hrs}h
-                    <div style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 1 }}>
-                      {week.isRecovery ? 'Recovery' : week.phaseLabel}
-                    </div>
-                  </div>
-                )}
-                <div style={{
-                  width: '100%',
-                  height: '100%',
-                  background: `linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0) 50%), ${color}`,
-                  borderRadius: '3px 3px 0 0',
-                  opacity: isHov ? 0.8 : 1,
-                  transition: 'opacity 0.1s',
-                  transformOrigin: 'bottom',
-                  animation: `bar-grow 0.55s cubic-bezier(0.2,0.7,0.3,1) both`,
-                  animationDelay: `${i * 28}ms`,
-                }} />
-              </div>
-            )
-          })}
-        </div>
-
-        {/* X-axis labels */}
-        <div style={{ display: 'flex', gap: 3, paddingTop: 5 }}>
-          {plan.map((week, i) => (
-            <div key={week.num} style={{
-              flex: 1,
-              textAlign: 'center',
-              fontSize: 9,
-              color: hovered === i ? 'var(--color-text-muted)' : 'var(--color-text-faint)',
-            }}>
-              {week.num}
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   )
 }
@@ -587,32 +474,7 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
 
       <ProjectionChart series={projection} events={events} />
 
-      {/* Phase legend */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: '1rem' }}>
-        {Object.entries(PHASE_COLORS).map(([phase, color]) => (
-          <div key={phase} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--color-text-muted)' }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
-            <span style={{ textTransform: 'capitalize' }}>{phase.replace('-', ' ')}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="card">
-        <h2>Weekly volume</h2>
-        <VolumeChart plan={plan} />
-      </div>
-
       <TrainingLoadCard plan={plan} sessionState={sessionState} activities={activities} user={user} planStart={planStart} />
-
-      <div className="card">
-        <h2>Event summary</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13, color: 'var(--color-text-muted)' }}>
-          <div><i className="ti ti-calendar" style={{ marginRight: 6 }} aria-hidden="true" />{user.event_date ? new Date(user.event_date).toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : 'Date not set'}</div>
-          <div><i className="ti ti-map-pin" style={{ marginRight: 6 }} aria-hidden="true" />{user.event_name || 'Event not set'}</div>
-          <div><i className="ti ti-route" style={{ marginRight: 6 }} aria-hidden="true" />{user.event_distance_km ? `${user.event_distance_km}km` : 'Distance not set'}</div>
-          <div><i className="ti ti-user" style={{ marginRight: 6 }} aria-hidden="true" />Age group: {user.age_group || 'Not set'}</div>
-        </div>
-      </div>
     </div>
   )
 }
