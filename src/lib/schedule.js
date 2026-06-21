@@ -113,6 +113,16 @@ export function nextEvent(events, from = new Date()) {
     .sort((a, b) => a._date - b._date)[0] || null
 }
 
+// The most recent event strictly before `from` (drives post-event recovery).
+export function prevEvent(events, from = new Date()) {
+  const f = new Date(from)
+  f.setHours(0, 0, 0, 0)
+  return [...(events || [])]
+    .map(e => ({ ...e, _date: parseLocalDate(e.date) }))
+    .filter(e => e._date && e._date.getTime() < f.getTime())
+    .sort((a, b) => b._date - a._date)[0] || null
+}
+
 // Whole-week count from `fromMonday` to the event's week (0 = event this week).
 export function weeksToEventFrom(event, fromMonday) {
   if (!event?._date) return null

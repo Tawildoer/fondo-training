@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { localDateStr, nextEvent } from '../lib/schedule'
+import { localDateStr, nextEvent, prevEvent } from '../lib/schedule'
 import {
   computeWeekTarget, draftWeek, projectCtl,
   ZONE_OPTIONS, DAY_NAMES, TIER_MIN, TIER_LABEL,
@@ -49,7 +49,9 @@ function fmtTime(v) {
 const ZONE_LABEL = { z1: 'Recovery', z2: 'Endurance', z3: 'Sweet spot', z4: 'Threshold', z5: 'VO₂', rest: 'Rest' }
 
 // How many quality (hard) days a week should carry, by event proximity / goal.
-function recommendedHardDays(weeksToEvent, goal) {
+function recommendedHardDays(weeksToEvent, goal, weeksSinceEvent) {
+  if (weeksSinceEvent === 1) return 0  // post-race recovery
+  if (weeksSinceEvent === 2) return 1  // gentle rebuild
   if (weeksToEvent != null) {
     if (weeksToEvent <= 2) return 1   // taper: keep a little sharpness
     if (weeksToEvent <= 8) return 3   // peak build
@@ -119,7 +121,11 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
     const wte = ev0?._date
       ? Math.max(0, Math.round((mondayOf(ev0._date) - ws) / (7 * 86400000)))
       : null
-    return defaultInputs(plannedWeeks, user, recommendedHardDays(wte, user.fitness_goal))
+    const pe0 = prevEvent(events, ws)
+    const wse = pe0?._date
+      ? Math.max(0, Math.round((ws - mondayOf(pe0._date)) / (7 * 86400000)))
+      : null
+    return defaultInputs(plannedWeeks, user, recommendedHardDays(wte, user.fitness_goal, wse))
   })
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -128,6 +134,10 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   const ev = nextEvent(events, weekStart)
   const weeksToEvent = ev?._date
     ? Math.max(0, Math.round((mondayOf(ev._date) - weekStart) / (7 * 86400000)))
+    : null
+  const pe = prevEvent(events, weekStart)
+  const weeksSinceEvent = pe?._date
+    ? Math.max(0, Math.round((weekStart - mondayOf(pe._date)) / (7 * 86400000)))
     : null
   const availableMinutes = DAY_NAMES.reduce((s, d) => s + (inputs.days[d] ? TIER_MIN[inputs.days[d].length] : 0), 0)
   const availDays = DAY_NAMES.filter(d => inputs.days[d]).length
@@ -139,8 +149,9 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
     weeklyHoursStart: user.weekly_hours_start || 0,
     daysPerWeek: user.days_per_week || 5,
     weeksToEvent,
+    weeksSinceEvent,
     weekNum: activeWeekNum,
-  }), [loadCtx, weeksToEvent, activeWeekNum, user.weekly_hours_start, user.days_per_week])
+  }), [loadCtx, weeksToEvent, weeksSinceEvent, activeWeekNum, user.weekly_hours_start, user.days_per_week])
 
   // Live recommendation (independent of which days you pick) so you know how
   // much to aim for before you even slide the days.

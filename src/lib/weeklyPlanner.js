@@ -9,7 +9,7 @@
 // (calendar, streak, training load, Strava auto-complete) just works.
 
 import { getZoneLabel } from './planGenerator'
-import { nextEvent, parseLocalDate } from './schedule'
+import { nextEvent, prevEvent, parseLocalDate } from './schedule'
 
 const ZONE_IF = { z1: 0.45, z2: 0.65, z3: 0.83, z4: 0.98, z5: 1.13 }
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -31,7 +31,7 @@ const TSS_PER_HOUR = 52 // endurance-weighted blended week
 
 export function computeWeekTarget(inputs, ctx = {}) {
   const { goal = 'build', freshness = 3, focus = 'none', busy = false } = inputs || {}
-  const { currentTsb = null, recentWeeklyTss = 0, weeklyHoursStart = 0, daysPerWeek = 5, weeksToEvent = null, weekNum = 1 } = ctx
+  const { currentTsb = null, recentWeeklyTss = 0, weeklyHoursStart = 0, daysPerWeek = 5, weeksToEvent = null, weeksSinceEvent = null, weekNum = 1 } = ctx
 
   // Where you start and a sustainable ceiling (classic ~1.8× start, capped by
   // how many days you ride). Pure sports-science heuristics on your profile.
@@ -55,24 +55,36 @@ export function computeWeekTarget(inputs, ctx = {}) {
     phase = 'Build'
   }
 
-  // Event periodization overlay: push volume in the peak window, taper in.
+  // Event periodization overlay: push volume in the peak window, taper in
+  // (softer taper than before so fitness doesn't fall off a cliff).
   let eventFactor = 1
   if (weeksToEvent != null) {
-    if (weeksToEvent <= 0) { eventFactor = 0.5; phase = 'Race week' }
-    else if (weeksToEvent === 1) { eventFactor = 0.6; phase = 'Taper' }
-    else if (weeksToEvent === 2) { eventFactor = 0.8; phase = 'Taper' }
+    if (weeksToEvent <= 0) { eventFactor = 0.55; phase = 'Race week' }
+    else if (weeksToEvent === 1) { eventFactor = 0.7; phase = 'Taper' }
+    else if (weeksToEvent === 2) { eventFactor = 0.85; phase = 'Taper' }
     else if (weeksToEvent <= 8) { eventFactor = 1.05; phase = 'Peak build' }
     else phase = 'Base build'
   }
 
+  // Post-event re-entry: the week after a race is a recovery/transition week,
+  // then volume rebuilds gradually over a couple of weeks rather than snapping
+  // straight back to full build.
+  let reentryFactor = 1
+  if (weeksSinceEvent === 2) reentryFactor = 0.8
+  else if (weeksSinceEvent === 3) reentryFactor = 0.9
+
   // Recovery week + subjective modifiers.
   const deeplyFatigued = currentTsb != null && currentTsb <= -25
-  const isRecovery = focus === 'recovery' || deeplyFatigued || (weekNum > 0 && weekNum % 4 === 0)
+  const postEventRecovery = weeksSinceEvent === 1
+  const isRecovery = focus === 'recovery' || deeplyFatigued || postEventRecovery || (weekNum > 0 && weekNum % 4 === 0)
   const freshnessFactor = [0.85, 0.85, 0.92, 1.0, 1.05, 1.1][clamp(freshness, 1, 5)]
   const busyFactor = busy ? 0.7 : 1
 
-  let factor = eventFactor * freshnessFactor * busyFactor
-  if (isRecovery) { factor = 0.6 * busyFactor; phase = 'Recovery' }
+  // Take the more conservative of the event taper and the post-event re-entry
+  // so neither over-rides the other when events are close together.
+  let factor = Math.min(eventFactor, reentryFactor) * freshnessFactor * busyFactor
+  if (reentryFactor < 1 && eventFactor >= 1) phase = 'Rebuild'
+  if (isRecovery) { factor = 0.6 * busyFactor; phase = postEventRecovery ? 'Post-race recovery' : 'Recovery' }
 
   let targetHours = baseHours * factor
   targetHours = clamp(targetHours, startHours * (isRecovery ? 0.4 : 0.5), maxHours * 1.05)
@@ -84,7 +96,7 @@ export function computeWeekTarget(inputs, ctx = {}) {
     isRecovery,
     phase,
     hardDays: isRecovery ? 0 : hardDaysFor(focus, weeksToEvent, inputs),
-    note: buildNote({ phase, goal, weeksToEvent, isRecovery, busy, deeplyFatigued }),
+    note: buildNote({ phase, goal, weeksToEvent, weeksSinceEvent, isRecovery, busy, deeplyFatigued }),
   }
 }
 
@@ -111,10 +123,12 @@ function countAvailable(inputs) {
   return DAY_NAMES.filter(d => days[d]).length
 }
 
-function buildNote({ phase, goal, weeksToEvent, isRecovery, busy, deeplyFatigued }) {
+function buildNote({ goal, weeksToEvent, weeksSinceEvent, isRecovery, busy, deeplyFatigued }) {
   if (deeplyFatigued) return 'Recovery week — your form is well into the red, so load is pulled back to let you absorb and rebound.'
+  if (weeksSinceEvent === 1) return 'Post-race recovery — an easy week to absorb your event before rebuilding.'
   if (isRecovery) return 'Recovery week — load is intentionally pulled back so you absorb the last block.'
   if (weeksToEvent != null && weeksToEvent <= 2) return `Tapering — ${weeksToEvent} week${weeksToEvent === 1 ? '' : 's'} out. Volume drops, legs stay sharp.`
+  if (weeksSinceEvent === 2 || weeksSinceEvent === 3) return 'Rebuilding after your event — easing volume back up over a couple of weeks.'
   if (weeksToEvent != null && weeksToEvent <= 8) return 'Peak build — volume ramps up as your event approaches.'
   if (busy) return 'Busy week — volume trimmed to protect recovery and consistency.'
   return goal === 'build' ? 'Building fitness — volume steps up progressively each week toward a sustainable ceiling.' : 'Maintaining fitness — holding your current volume steady.'
@@ -255,13 +269,15 @@ export function projectLoad({ currentCtl = 0, recentWeeklyTss = 0, planStart, cu
     const weekStart = mondayOfPlanWeek(planStart, weekNum)
     const ev = nextEvent(events, weekStart)
     const weeksToEvent = ev?._date ? Math.max(0, Math.round((mondayOfDate(ev._date) - weekStart) / (7 * 86400000))) : null
+    const pe = prevEvent(events, weekStart)
+    const weeksSinceEvent = pe?._date ? Math.max(0, Math.round((weekStart - mondayOfDate(pe._date)) / (7 * 86400000))) : null
     let tss, planned = false
     if (plannedByNum[weekNum]) {
       tss = weekTss(plannedByNum[weekNum].sessions); planned = true
     } else {
       tss = computeWeekTarget(
         { goal, freshness: 3, focus: 'none', busy: false },
-        { currentTsb: null, recentWeeklyTss: prevTss, weeklyHoursStart, daysPerWeek, weeksToEvent, weekNum }
+        { currentTsb: null, recentWeeklyTss: prevTss, weeklyHoursStart, daysPerWeek, weeksToEvent, weeksSinceEvent, weekNum }
       ).targetTss
     }
     const daily = tss / 7
