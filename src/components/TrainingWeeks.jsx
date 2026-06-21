@@ -262,7 +262,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                   marginTop: 8, marginRight: 14, display: 'inline-flex', gap: 5, alignItems: 'center',
                                   cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
                                   padding: 0, fontSize: 11, fontWeight: 600,
-                                  color: bailed ? 'inherit' : 'var(--color-red-text)', opacity: bailed ? 0.55 : 0.8,
+                                  color: 'inherit', opacity: bailed ? 0.55 : 0.85,
                                   textTransform: 'uppercase', letterSpacing: '0.05em',
                                 }}
                               >

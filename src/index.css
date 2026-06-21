@@ -35,12 +35,12 @@
   --shadow-card: 0 1px 3px rgba(0,0,0,0.28), 0 6px 18px rgba(0,0,0,0.18);
   --shadow-card-hover: 0 2px 6px rgba(0,0,0,0.30), 0 12px 28px rgba(0,0,0,0.24);
   --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-  /* Training-zone ramp — cool (easy) → electric-warm (hard), on-brand. */
-  --zone-z1-bg: rgba(15,110,86,0.20);   --zone-z1-fg: #6FE0C2;  /* recovery — teal */
-  --zone-z2-bg: rgba(24,95,165,0.26);   --zone-z2-fg: #86BAF4;  /* endurance — brand blue */
-  --zone-z3-bg: rgba(124,111,240,0.24); --zone-z3-fg: #BEB6FC;  /* sweet spot — violet */
-  --zone-z4-bg: rgba(255,200,60,0.18);  --zone-z4-fg: #FFD23F;  /* threshold — electric yellow */
-  --zone-z5-bg: rgba(230,95,70,0.24);   --zone-z5-fg: #FF9E80;  /* VO₂ — coral */
+  /* Training-zone ramp — vibrant gradients, cool (easy) → electric-warm (hard). */
+  --zone-z1-bg: linear-gradient(135deg, #0E7C5E, #16B98E);  --zone-z1-fg: #ffffff; /* recovery — teal */
+  --zone-z2-bg: linear-gradient(135deg, #1A66B3, #3E5FD0);  --zone-z2-fg: #ffffff; /* endurance — brand blue */
+  --zone-z3-bg: linear-gradient(135deg, #5E4FCC, #9171F2);  --zone-z3-fg: #ffffff; /* sweet spot — violet */
+  --zone-z4-bg: linear-gradient(135deg, #F0A81E, #FFD23F);  --zone-z4-fg: #241f0e; /* threshold — electric yellow */
+  --zone-z5-bg: linear-gradient(135deg, #C8392A, #FF6F4D);  --zone-z5-fg: #ffffff; /* VO₂ — coral */
   --radius: 10px;
   --radius-sm: 6px;
 }
