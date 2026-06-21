@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { getScheduledSessions, downloadICS } from '../lib/schedule'
 
 const ZONE_COLORS = {
-  z1: { bg: 'var(--color-teal-light)',   text: 'var(--color-teal-text)',   label: 'Recovery' },
-  z2: { bg: 'var(--color-green-light)',  text: 'var(--color-green-text)',  label: 'Endurance (Z2)' },
-  z3: { bg: 'var(--color-purple-light)', text: 'var(--color-purple-text)', label: 'Tempo / Sweet spot' },
-  z4: { bg: 'var(--color-amber-light)',  text: 'var(--color-amber-text)',  label: 'Threshold' },
-  z5: { bg: 'var(--color-red-light)',    text: 'var(--color-red-text)',    label: 'HIIT / VO₂ max' },
+  z1: { bg: 'var(--zone-z1-bg)', text: 'var(--zone-z1-fg)', label: 'Recovery' },
+  z2: { bg: 'var(--zone-z2-bg)', text: 'var(--zone-z2-fg)', label: 'Endurance (Z2)' },
+  z3: { bg: 'var(--zone-z3-bg)', text: 'var(--zone-z3-fg)', label: 'Tempo / Sweet spot' },
+  z4: { bg: 'var(--zone-z4-bg)', text: 'var(--zone-z4-fg)', label: 'Threshold' },
+  z5: { bg: 'var(--zone-z5-bg)', text: 'var(--zone-z5-fg)', label: 'HIIT / VO₂ max' },
 }
 
 function buildSessionsByDate(plan, sessionState, base) {

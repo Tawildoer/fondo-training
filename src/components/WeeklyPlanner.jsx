@@ -185,7 +185,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
       focus: existing.inputs.focus || 'none',
       busy: !!existing.inputs.busy,
     })
-    setDraft(null); setTarget(null); setEditing(true)
+    setEditing(true)
   }
 
   return (
@@ -200,8 +200,8 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button className={`btn btn-sm ${offset === 0 ? 'btn-primary' : ''}`} onClick={() => { setOffset(0); setDraft(null); setEditing(false) }}>This week</button>
-          <button className={`btn btn-sm ${offset === 1 ? 'btn-primary' : ''}`} onClick={() => { setOffset(1); setDraft(null); setEditing(false) }}>Next week</button>
+          <button className={`btn btn-sm ${offset === 0 ? 'btn-primary' : ''}`} onClick={() => { setOffset(0); setEditing(false) }}>This week</button>
+          <button className={`btn btn-sm ${offset === 1 ? 'btn-primary' : ''}`} onClick={() => { setOffset(1); setEditing(false) }}>Next week</button>
         </div>
       </div>
 
