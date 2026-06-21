@@ -5,7 +5,6 @@ import {
   ZONE_OPTIONS, DAY_NAMES,
 } from '../lib/weeklyPlanner'
 
-const TIME_OPTIONS = [0, 30, 45, 60, 90, 120, 180, 240]
 const FOCUS_OPTIONS = [
   { v: 'none', label: 'Balanced' },
   { v: 'endurance', label: 'Endurance' },
@@ -36,25 +35,45 @@ function fmtTime(v) {
 
 const ZONE_LABEL = { z1: 'Recovery', z2: 'Endurance', z3: 'Sweet spot', z4: 'Threshold', z5: 'VO₂', rest: 'Rest' }
 
+// Sensible starting point so most weeks are one tap: reuse the last planned
+// week's pattern, otherwise a light template from the user's usual days.
+function defaultInputs(plannedWeeks, user) {
+  const latest = [...(plannedWeeks || [])].sort((a, b) => a.week_num - b.week_num).pop()
+  if (latest?.inputs?.days && Object.values(latest.inputs.days).some(v => v > 0)) {
+    return {
+      days: { ...latest.inputs.days },
+      goal: latest.inputs.goal || user.fitness_goal || 'build',
+      focus: latest.inputs.focus || 'none',
+      freshness: 3, busy: false, // momentary signals reset each week
+    }
+  }
+  const order = ['Sat', 'Tue', 'Thu', 'Sun', 'Wed', 'Mon', 'Fri']
+  const n = Math.max(3, Math.min(7, user.days_per_week || 4))
+  const days = {}
+  order.slice(0, n).forEach(d => { days[d] = d === 'Sat' ? 120 : 60 })
+  return { days, goal: user.fitness_goal || 'build', focus: 'none', freshness: 3, busy: false }
+}
+
 export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, loadCtx, onSave, onDelete }) {
   const [offset, setOffset] = useState(0) // 0 = this week, 1 = next week
   const activeWeekNum = weekNum + offset
   const weekStart = useMemo(() => mondayOfWeek(planStart, activeWeekNum), [planStart, activeWeekNum])
   const existing = plannedWeeks.find(w => w.week_num === activeWeekNum)
 
-  const [inputs, setInputs] = useState({
-    days: {}, goal: user.fitness_goal || 'build', freshness: 3, focus: 'none', busy: false,
-  })
+  const [inputs, setInputs] = useState(() => defaultInputs(plannedWeeks, user))
   const [draft, setDraft] = useState(null)
   const [target, setTarget] = useState(null)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
 
   const eventDate = user.event_date ? new Date(user.event_date) : null
   const weeksToEvent = eventDate
     ? Math.max(0, Math.round((mondayOf(eventDate) - weekStart) / (7 * 86400000)))
     : null
   const availableMinutes = DAY_NAMES.reduce((s, d) => s + (inputs.days[d] || 0), 0)
+  const availDays = DAY_NAMES.filter(d => (inputs.days[d] || 0) > 0).length
+  const totalHours = Math.round((availableMinutes / 60) * 10) / 10
 
   const weekLabel = weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
@@ -143,27 +162,35 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
         <>
           {/* Constraints */}
           <div className="card">
-            <h2>Your week</h2>
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: -4, marginBottom: 14 }}>
-              How much time can you ride each day? Leave a day on "Rest" if it's off.
+            <h2>How much can you ride?</h2>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: -4, marginBottom: 16 }}>
+              Slide each day to the time you've got. We've started you off — just adjust what's changed.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-              {DAY_NAMES.map(day => (
-                <div key={day} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ width: 38, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--color-text-muted)' }}>{day}</span>
-                  <select
-                    value={inputs.days[day] || 0}
-                    onChange={e => setDay(day, +e.target.value)}
-                    style={selectStyle}
-                  >
-                    {TIME_OPTIONS.map(v => <option key={v} value={v}>{fmtTime(v)}</option>)}
-                  </select>
-                </div>
-              ))}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 8 }}>
+              {DAY_NAMES.map(day => {
+                const v = inputs.days[day] || 0
+                return (
+                  <div key={day} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span style={{ width: 34, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: v ? 'var(--color-text)' : 'var(--color-text-faint)' }}>{day}</span>
+                    <input
+                      type="range" min="0" max="240" step="15" value={v}
+                      onChange={e => setDay(day, +e.target.value)}
+                      aria-label={`${day} ride time`}
+                      style={{ flex: 1, accentColor: 'var(--color-accent)', height: 4 }}
+                    />
+                    <span style={{ width: 56, textAlign: 'right', fontSize: 12, fontWeight: 600, color: v ? 'var(--color-accent-text)' : 'var(--color-text-faint)' }}>{fmtTime(v)}</span>
+                  </div>
+                )
+              })}
             </div>
 
-            <div className="field">
-              <label>Goal</label>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '6px 0 16px' }}>
+              {availDays} day{availDays === 1 ? '' : 's'} · ~{totalHours}h this week
+            </div>
+
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>Goal this week</label>
               <Segmented
                 value={inputs.goal}
                 onChange={v => setInputs(p => ({ ...p, goal: v }))}
@@ -171,33 +198,42 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
               />
             </div>
 
-            <div className="field">
-              <label>How fresh do you feel?</label>
-              <div style={{ display: 'flex', gap: 6 }}>
-                {[1, 2, 3, 4, 5].map(n => (
-                  <button key={n} onClick={() => setInputs(p => ({ ...p, freshness: n }))}
-                    className={`btn btn-sm ${inputs.freshness === n ? 'btn-primary' : ''}`} style={{ flex: 1 }}>{n}</button>
-                ))}
-              </div>
-              <div className="hint">1 = wrecked · 5 = flying</div>
-            </div>
-
-            <div className="field">
-              <label>Focus</label>
-              <select value={inputs.focus} onChange={e => setInputs(p => ({ ...p, focus: e.target.value }))} style={selectStyle}>
-                {FOCUS_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
-              </select>
-            </div>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-              <input type="checkbox" checked={inputs.busy} onChange={e => setInputs(p => ({ ...p, busy: e.target.checked }))} style={{ width: 16, height: 16, accentColor: 'var(--color-accent)' }} />
-              Busy week — lighten the load
-            </label>
-
-            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={generate} disabled={availableMinutes === 0}>
-              <i className="ti ti-bolt" aria-hidden="true" /> {draft ? 'Regenerate' : 'Generate draft'}
+            {/* Secondary, optional choices tucked away to keep things light */}
+            <button className="btn btn-sm" onClick={() => setShowDetails(s => !s)} style={{ marginBottom: showDetails ? 14 : 0 }}>
+              <i className={`ti ${showDetails ? 'ti-chevron-up' : 'ti-adjustments'}`} aria-hidden="true" /> {showDetails ? 'Hide fine-tuning' : 'Fine-tune (optional)'}
             </button>
-            {availableMinutes === 0 && <div className="hint" style={{ marginTop: 6 }}>Add time to at least one day to generate a week.</div>}
+
+            {showDetails && (
+              <div>
+                <div className="field">
+                  <label>How fresh do you feel?</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <button key={n} onClick={() => setInputs(p => ({ ...p, freshness: n }))}
+                        className={`btn btn-sm ${inputs.freshness === n ? 'btn-primary' : ''}`} style={{ flex: 1 }}>{n}</button>
+                    ))}
+                  </div>
+                  <div className="hint">1 = wrecked · 5 = flying</div>
+                </div>
+
+                <div className="field">
+                  <label>Focus</label>
+                  <select value={inputs.focus} onChange={e => setInputs(p => ({ ...p, focus: e.target.value }))} style={selectStyle}>
+                    {FOCUS_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
+                  </select>
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={inputs.busy} onChange={e => setInputs(p => ({ ...p, busy: e.target.checked }))} style={{ width: 16, height: 16, accentColor: 'var(--color-accent)' }} />
+                  Busy week — lighten the load
+                </label>
+              </div>
+            )}
+
+            <button className="btn btn-primary" style={{ marginTop: 18, width: '100%', justifyContent: 'center' }} onClick={generate} disabled={availableMinutes === 0}>
+              <i className="ti ti-bolt" aria-hidden="true" /> {draft ? 'Regenerate draft' : 'Generate my week'}
+            </button>
+            {availableMinutes === 0 && <div className="hint" style={{ marginTop: 6 }}>Slide at least one day above Rest to generate a week.</div>}
           </div>
 
           {/* Draft */}
