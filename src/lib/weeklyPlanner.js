@@ -22,6 +22,20 @@ export function tssFor(zone, minutes) {
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
+// Estimated TSS of doing the event itself (a big one-off stimulus), from its
+// type + distance. Used so the projection bumps up on the event, not just dips.
+const EVENT_SPEED = { road_race: 38, criterium: 40, time_trial: 40, gran_fondo: 29, sportive: 28, other: 30 } // km/h
+const EVENT_IF = { road_race: 0.85, criterium: 0.88, time_trial: 0.92, gran_fondo: 0.78, sportive: 0.76, other: 0.78 }
+export function estimateEventTss(event) {
+  if (!event) return 0
+  const type = event.event_type || 'other'
+  const IF = EVENT_IF[type] || 0.78
+  let hours = event.distance_km ? event.distance_km / (EVENT_SPEED[type] || 30) : null
+  if (!hours) hours = ['criterium', 'time_trial'].includes(type) ? 1 : 3 // sensible default
+  hours = clamp(hours, 0.5, 8)
+  return Math.round(hours * IF * IF * 100)
+}
+
 // ── 1. Weekly load target ────────────────────────────────────
 // Self-contained weekly volume model — works entirely from the athlete's
 // profile and real data, with no dependency on the (now-retired) fixed plan.
@@ -280,9 +294,14 @@ export function projectLoad({ currentCtl = 0, recentWeeklyTss = 0, planStart, cu
         { currentTsb: null, recentWeeklyTss: prevTss, weeklyHoursStart, daysPerWeek, weeksToEvent, weeksSinceEvent, weekNum }
       ).targetTss
     }
-    const daily = tss / 7
+    // The event itself adds a big one-off load on its week (so CTL bumps up at
+    // the race). Kept separate from `tss` so it doesn't inflate the rebuild.
+    const weekEnd = new Date(weekStart.getTime() + 7 * 86400000)
+    const evThisWeek = (events || []).find(e => { const d = parseLocalDate(e.date); return d && d >= weekStart && d < weekEnd })
+    const eventTss = evThisWeek ? estimateEventTss(evThisWeek) : 0
+    const daily = (tss + eventTss) / 7
     for (let d = 0; d < 7; d++) ctl += (daily - ctl) / 42
-    series.push({ weekNum, weekStart, tss, ctl: Math.round(ctl), planned })
+    series.push({ weekNum, weekStart, tss, ctl: Math.round(ctl), planned, eventTss })
     prevTss = tss
   }
   return series
