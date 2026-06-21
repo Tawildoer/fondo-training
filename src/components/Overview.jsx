@@ -138,6 +138,23 @@ function StreakCard({ streak }) {
   )
 }
 
+function PlanWeekCTA({ onPlanWeek }) {
+  return (
+    <div className="card" style={{ background: 'var(--grad-hero)', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <i className="ti ti-calendar-bolt" style={{ fontSize: 26, color: 'var(--color-electric)' }} aria-hidden="true" />
+        <div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 700 }}>Plan this week</div>
+          <div style={{ fontSize: 12, opacity: 0.85 }}>Tell the app your time + how you feel, and it'll draft your week.</div>
+        </div>
+      </div>
+      <button className="btn btn-sm" onClick={onPlanWeek} style={{ background: '#fff', color: 'var(--color-accent-text)', border: 'none', fontWeight: 600 }}>
+        Plan now <i className="ti ti-arrow-right" aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
+
 function AdaptationBanner({ adaptation }) {
   if (!adaptation) return null
   return (
@@ -455,11 +472,12 @@ function TrainingLoadCard({ plan, sessionState, activities, user, planStart }) {
   )
 }
 
-export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], streak, onToggle, onBail, onRPE, doneSessions, totalSessions, daysLeft, strava }) {
+export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], streak, needsPlan, onPlanWeek, onToggle, onBail, onRPE, doneSessions, totalSessions, daysLeft, strava }) {
   const pct = totalSessions ? Math.round((doneSessions / totalSessions) * 100) : 0
 
   return (
     <div>
+      {needsPlan && <PlanWeekCTA onPlanWeek={onPlanWeek} />}
       <CatchUpCard unconfirmed={unconfirmed} onToggle={onToggle} onBail={onBail} onRPE={onRPE} />
       <AdaptationBanner adaptation={adaptation} />
       <TodayCard plan={plan} sessionState={sessionState} planStart={planStart} onToggle={onToggle} onBail={onBail} />

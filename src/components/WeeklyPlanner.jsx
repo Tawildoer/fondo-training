@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { localDateStr } from '../lib/schedule'
 import {
-  computeWeekTarget, draftWeek, weekTss, buildSession,
+  computeWeekTarget, draftWeek, weekTss, buildSession, projectCtl,
   ZONE_OPTIONS, DAY_NAMES,
 } from '../lib/weeklyPlanner'
 
@@ -65,6 +65,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   function generate() {
     const ctx = {
       currentCtl: loadCtx?.currentCtl || 0,
+      currentTsb: loadCtx?.currentTsb ?? null,
       recentWeeklyTss: loadCtx?.recentWeeklyTss || 0,
       weeksToEvent,
       weekNum: activeWeekNum,
@@ -207,6 +208,12 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                 <i className="ti ti-info-circle" aria-hidden="true" />
                 <span>{target.note} <strong>Target ~{target.targetTss} TSS</strong> · this draft ≈ {draftTss} TSS.</span>
               </div>
+              {loadCtx?.currentCtl > 0 && (
+                <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 14, fontSize: 12, color: 'var(--color-text-muted)' }}>
+                  <span>Fitness now: <strong style={{ color: 'var(--color-text)' }}>{loadCtx.currentCtl} CTL</strong></span>
+                  <span>→ after this week: <strong style={{ color: projectCtl(loadCtx.currentCtl, draftTss) >= loadCtx.currentCtl ? 'var(--color-green-text)' : 'var(--color-amber-text)' }}>~{projectCtl(loadCtx.currentCtl, draftTss)} CTL</strong></span>
+                </div>
+              )}
               <SessionList sessions={draft} ftp={user.ftp} editable onEdit={editSession} />
               <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
                 <button className="btn btn-primary" onClick={lock} disabled={saving}>

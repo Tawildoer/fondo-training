@@ -261,8 +261,13 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
   const loadCtx = useMemo(() => {
     const tl = computeTrainingLoad(plan, sessionState, activities, user, planStart)
     const recentWeeklyTss = tl.series.slice(-7).reduce((s, d) => s + d.load, 0)
-    return { currentCtl: tl.current.ctl, recentWeeklyTss: Math.round(recentWeeklyTss) }
+    return { currentCtl: tl.current.ctl, currentTsb: tl.current.tsb, recentWeeklyTss: Math.round(recentWeeklyTss) }
   }, [plan, sessionState, activities, user, planStart])
+
+  const currentWeekPlanned = useMemo(
+    () => plannedWeeks.some(w => w.week_num === realCurrentWeek),
+    [plannedWeeks, realCurrentWeek]
+  )
 
   const totalSessions = adjustedPlan.reduce((a, w) => a + w.sessions.filter(s => s.zone !== 'rest').length, 0)
   const doneSessions = Object.values(sessionState).filter(s => s?.completed).length
@@ -332,6 +337,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
       ) : (
         <>
           {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} activities={activities} streak={streak} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
+            needsPlan={weeklyMode && !currentWeekPlanned} onPlanWeek={() => setTab('plan-week')}
             strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }} />}
           {tab === 'plan-week' && weeklyMode && <WeeklyPlanner user={user} planStart={planStart} weekNum={realCurrentWeek} plannedWeeks={plannedWeeks} loadCtx={loadCtx} onSave={handleSaveWeek} onDelete={handleDeleteWeek} />}
           {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={user.event_name} />}

@@ -26,7 +26,7 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 //           weekNum, availableMinutes }
 export function computeWeekTarget(inputs, ctx = {}) {
   const { goal = 'build', freshness = 3, focus = 'none', busy = false } = inputs || {}
-  const { currentCtl = 0, recentWeeklyTss = 0, weeksToEvent = null, weekNum = 1, availableMinutes = 0 } = ctx
+  const { currentCtl = 0, currentTsb = null, recentWeeklyTss = 0, weeksToEvent = null, weekNum = 1, availableMinutes = 0 } = ctx
 
   // Baseline = what you've been doing (best signal), else maintain current
   // fitness (CTL≈mean daily TSS, so a maintaining week ≈ CTL×7), else a rough
@@ -35,9 +35,10 @@ export function computeWeekTarget(inputs, ctx = {}) {
     : currentCtl > 0 ? currentCtl * 7
     : tssFor('z2', availableMinutes) || 250
 
-  // A recovery week resets the block: scheduled every 4th week, or when you
-  // explicitly ask for one.
-  const isRecovery = focus === 'recovery' || (weekNum > 0 && weekNum % 4 === 0)
+  // A recovery week resets the block: when you ask for one, on a scheduled
+  // 4-week cadence, or when fatigue is deep (form well into the red).
+  const deeplyFatigued = currentTsb != null && currentTsb <= -25
+  const isRecovery = focus === 'recovery' || (weekNum > 0 && weekNum % 4 === 0) || deeplyFatigued
 
   // Macro factor: event periodization wins when an event is set, otherwise the
   // maintain/build goal drives it.
@@ -72,8 +73,17 @@ export function computeWeekTarget(inputs, ctx = {}) {
     isRecovery,
     phase,
     hardDays: isRecovery ? 0 : hardDaysFor(focus, weeksToEvent, inputs),
-    note: buildNote({ phase, goal, weeksToEvent, isRecovery, busy }),
+    note: buildNote({ phase, goal, weeksToEvent, isRecovery, busy, deeplyFatigued }),
   }
+}
+
+// Rough projection of where this week's load leaves your fitness (CTL), so the
+// planner can show "CTL 48 → 50" — leaning into the analytics ethos.
+export function projectCtl(currentCtl, weeklyTss) {
+  const daily = (weeklyTss || 0) / 7
+  let ctl = currentCtl || 0
+  for (let i = 0; i < 7; i++) ctl += (daily - ctl) / 42
+  return Math.round(ctl)
 }
 
 function hardDaysFor(focus, weeksToEvent, inputs) {
@@ -90,7 +100,8 @@ function countAvailable(inputs) {
   return DAY_NAMES.filter(d => (days[d] || 0) > 0).length
 }
 
-function buildNote({ phase, goal, weeksToEvent, isRecovery, busy }) {
+function buildNote({ phase, goal, weeksToEvent, isRecovery, busy, deeplyFatigued }) {
+  if (deeplyFatigued) return 'Recovery week — your form is well into the red, so load is pulled back to let you absorb and rebound.'
   if (isRecovery) return 'Recovery week — load is intentionally pulled back so you absorb the last block.'
   if (weeksToEvent != null && weeksToEvent <= 2) return `Tapering — ${weeksToEvent} week${weeksToEvent === 1 ? '' : 's'} out. Volume drops, legs stay sharp.`
   if (weeksToEvent != null && weeksToEvent <= 8) return 'Peak build — volume ramps up as your event approaches.'
