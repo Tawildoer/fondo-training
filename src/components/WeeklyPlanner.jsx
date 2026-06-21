@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { localDateStr } from '../lib/schedule'
 import {
-  computeWeekTarget, draftWeek, weekTss, buildSession, projectCtl,
+  computeWeekTarget, draftWeek, projectCtl,
   ZONE_OPTIONS, DAY_NAMES, TIER_MIN, TIER_LABEL,
 } from '../lib/weeklyPlanner'
 
@@ -74,15 +74,13 @@ function defaultInputs(plannedWeeks, user) {
   return { days, goal: user.fitness_goal || 'build', focus: 'none', freshness: 3, busy: false }
 }
 
-export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, loadCtx, onSave, onDelete }) {
+export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, loadCtx, onSave, onDelete, onGenerated }) {
   const [offset, setOffset] = useState(0) // 0 = this week, 1 = next week
   const activeWeekNum = weekNum + offset
   const weekStart = useMemo(() => mondayOfWeek(planStart, activeWeekNum), [planStart, activeWeekNum])
   const existing = plannedWeeks.find(w => w.week_num === activeWeekNum)
 
   const [inputs, setInputs] = useState(() => defaultInputs(plannedWeeks, user))
-  const [draft, setDraft] = useState(null)
-  const [target, setTarget] = useState(null)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
@@ -122,33 +120,22 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
     setInputs(prev => ({ ...prev, days: { ...prev.days, [day]: { ...prev.days[day], [field]: val } } }))
   }
 
-  function generate() {
-    const t = computeWeekTarget(inputs, ctx)
-    setTarget(t)
-    setDraft(draftWeek(t, inputs, user.ftp))
-  }
-
-  function editSession(i, patch) {
-    setDraft(prev => prev.map((s, idx) => {
-      if (idx !== i) return s
-      const zone = patch.zone ?? s.zone
-      if (zone === 'rest') return buildSession(s.day, 'rest', 0, user.ftp)
-      const minutes = patch.minutes ?? (s.durationMin || 60)
-      return buildSession(s.day, zone, minutes, user.ftp, s.name === 'Long ride')
-    }))
-  }
-
-  async function lock() {
+  // Generate now commits straight to the plan — no draft step. You edit the
+  // sessions afterwards from Training weeks.
+  async function generate() {
     setSaving(true)
+    const t = computeWeekTarget(inputs, ctx)
+    const sessions = draftWeek(t, inputs, user.ftp)
     await onSave(activeWeekNum, {
       week_start: localDateStr(weekStart),
-      target_tss: target?.targetTss ?? null,
-      sessions: draft,
-      inputs: { ...inputs, phase: target?.phase, recovery: target?.isRecovery },
+      target_tss: t.targetTss,
+      sessions,
+      inputs: { ...inputs, phase: t.phase, recovery: t.isRecovery },
       locked_at: new Date().toISOString(),
     })
     setSaving(false)
-    setDraft(null); setTarget(null); setEditing(false)
+    setEditing(false)
+    onGenerated?.()
   }
 
   function startReplan() {
@@ -161,8 +148,6 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
     })
     setDraft(null); setTarget(null); setEditing(true)
   }
-
-  const draftTss = draft ? weekTss(draft) : 0
 
   return (
     <div>
@@ -182,7 +167,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
       </div>
 
       {/* Locked view */}
-      {existing && !editing && !draft ? (
+      {existing && !editing ? (
         <div className="card">
           <h2>Locked in · {existing.inputs?.phase || 'Planned week'}</h2>
           <SessionList sessions={existing.sessions} ftp={user.ftp} />
@@ -214,6 +199,11 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                   <span style={{ fontSize: 12, opacity: 0.85 }}>≈ {suggestion.targetTss} TSS · you've set {totalHours} h</span>
                 </div>
                 <div style={{ fontSize: 12, opacity: 0.9, marginTop: 3, lineHeight: 1.4 }}>{suggestion.note}</div>
+                {loadCtx?.currentCtl > 0 && (
+                  <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>
+                    Fitness {loadCtx.currentCtl} → ~{projectCtl(loadCtx.currentCtl, suggestion.targetTss)} CTL if you hit it
+                  </div>
+                )}
               </div>
             </div>
 
@@ -309,35 +299,13 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
               </div>
             )}
 
-            <button className="btn btn-primary" style={{ marginTop: 18, width: '100%', justifyContent: 'center' }} onClick={generate} disabled={availableMinutes === 0}>
-              <i className="ti ti-bolt" aria-hidden="true" /> {draft ? 'Regenerate draft' : 'Generate my week'}
+            <button className="btn btn-primary" style={{ marginTop: 18, width: '100%', justifyContent: 'center' }} onClick={generate} disabled={availableMinutes === 0 || saving}>
+              <i className="ti ti-bolt" aria-hidden="true" /> {saving ? 'Building…' : (existing ? 'Rebuild this week' : 'Generate my week')}
             </button>
-            {availableMinutes === 0 && <div className="hint" style={{ marginTop: 6 }}>Slide at least one day above Rest to generate a week.</div>}
-          </div>
-
-          {/* Draft */}
-          {draft && target && (
-            <div className="card">
-              <h2>Draft · {target.phase}</h2>
-              <div className="adaptive-banner hold" style={{ marginBottom: 14 }}>
-                <i className="ti ti-info-circle" aria-hidden="true" />
-                <span>{target.note} <strong>Target ~{target.targetTss} TSS</strong> · this draft ≈ {draftTss} TSS.</span>
-              </div>
-              {loadCtx?.currentCtl > 0 && (
-                <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 14, fontSize: 12, color: 'var(--color-text-muted)' }}>
-                  <span>Fitness now: <strong style={{ color: 'var(--color-text)' }}>{loadCtx.currentCtl} CTL</strong></span>
-                  <span>→ after this week: <strong style={{ color: projectCtl(loadCtx.currentCtl, draftTss) >= loadCtx.currentCtl ? 'var(--color-green-text)' : 'var(--color-amber-text)' }}>~{projectCtl(loadCtx.currentCtl, draftTss)} CTL</strong></span>
-                </div>
-              )}
-              <SessionList sessions={draft} ftp={user.ftp} editable onEdit={editSession} />
-              <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-                <button className="btn btn-primary" onClick={lock} disabled={saving}>
-                  <i className="ti ti-lock" aria-hidden="true" /> {saving ? 'Locking…' : 'Lock week'}
-                </button>
-                <button className="btn" onClick={() => { setDraft(null); setTarget(null) }}>Discard</button>
-              </div>
+            <div className="hint" style={{ marginTop: 6 }}>
+              {availableMinutes === 0 ? 'Tap at least one day to generate a week.' : 'Lands straight in Training weeks — edit any session there.'}
             </div>
-          )}
+          </div>
         </>
       )}
     </div>

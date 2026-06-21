@@ -12,6 +12,7 @@ import Overview from './Overview'
 import CalendarView from './CalendarView'
 import PlanGuide from './PlanGuide'
 import WeeklyPlanner from './WeeklyPlanner'
+import { buildSession } from '../lib/weeklyPlanner'
 
 // Reconstruct the app-wide plan shape from persisted weekly-planner weeks.
 function buildPlanFromWeeks(weeks) {
@@ -183,6 +184,20 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     setPlannedWeeks(prev => prev.filter(w => w.week_num !== weekNumToDelete))
   }
 
+  // Edit a single session of a planned week in place (zone and/or duration).
+  async function handleEditSession(weekNumE, idx, patch) {
+    const row = plannedWeeks.find(w => w.week_num === weekNumE)
+    if (!row) return
+    const cur = row.sessions?.[idx] || {}
+    const zone = patch.zone ?? cur.zone
+    const updated = zone === 'rest'
+      ? buildSession(cur.day, 'rest', 0, user.ftp)
+      : buildSession(cur.day, zone, patch.minutes ?? cur.durationMin ?? 60, user.ftp, cur.name === 'Long ride')
+    const sessions = row.sessions.map((s, i) => (i === idx ? updated : s))
+    const saved = await upsertPlannedWeek(user.id, weekNumE, { sessions })
+    if (saved) setPlannedWeeks(prev => prev.map(w => (w.week_num === weekNumE ? saved : w)))
+  }
+
   async function handleSetMode(mode) {
     setTab('overview')
     await updateUser(user.id, { planning_mode: mode })
@@ -324,9 +339,9 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
           {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} activities={activities} streak={streak} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
             needsPlan={weeklyMode && !currentWeekPlanned} onPlanWeek={() => setTab('plan-week')}
             strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }} />}
-          {tab === 'plan-week' && weeklyMode && <WeeklyPlanner user={user} planStart={planStart} weekNum={realCurrentWeek} plannedWeeks={plannedWeeks} loadCtx={loadCtx} onSave={handleSaveWeek} onDelete={handleDeleteWeek} />}
+          {tab === 'plan-week' && weeklyMode && <WeeklyPlanner user={user} planStart={planStart} weekNum={realCurrentWeek} plannedWeeks={plannedWeeks} loadCtx={loadCtx} onSave={handleSaveWeek} onDelete={handleDeleteWeek} onGenerated={() => setTab('training')} />}
           {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={user.event_name} />}
-          {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} user={user} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} />}
+          {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} user={user} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} onEditSession={handleEditSession} />}
           {tab === 'guide' && <PlanGuide plan={adjustedPlan} user={user} />}
           {tab === 'zones' && <PowerZones user={user} onUpdateFTP={handleUpdateFTP} ftpHistory={ftpHistory} />}
 {tab === 'adjustments' && <Adjustments user={user} adjustments={adjustments} plan={adjustedPlan} onAdd={handleAddAdjustment} onDelete={handleDeleteAdjustment} onUpdateFTP={handleUpdateFTP} />}

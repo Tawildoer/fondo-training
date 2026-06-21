@@ -2,7 +2,49 @@ import { useState, useEffect } from 'react'
 import { RPE_LABELS } from '../lib/planGenerator'
 import { getSessionDate } from '../lib/schedule'
 import { matchActivityToDate } from '../lib/strava'
+import { ZONE_OPTIONS } from '../lib/weeklyPlanner'
 import ActivityDetail from './ActivityDetail'
+
+const fmtMin = m => (m >= 90 ? `${Math.round(m / 30) * 30 / 60} hr` : `${m} min`)
+const stepBtnSm = {
+  width: 26, height: 26, borderRadius: '50%', border: '0.5px solid var(--color-border-strong)',
+  background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: 16, lineHeight: 1,
+  cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+}
+
+// Inline editor for a planned session (zone pills + duration stepper).
+function SessionEditor({ session, onChange }) {
+  const mins = session.durationMin || 60
+  return (
+    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '0.5px solid rgba(128,128,128,0.18)' }}>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+        {ZONE_OPTIONS.map(o => {
+          const active = session.zone === o.zone
+          return (
+            <button key={o.zone} onClick={() => onChange({ zone: o.zone })}
+              className={o.zone === 'rest' ? '' : `sess-${o.zone}`}
+              style={{
+                padding: '3px 9px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                border: `1.5px solid ${active ? 'currentColor' : 'transparent'}`,
+                background: o.zone === 'rest' ? 'var(--color-surface2)' : undefined,
+                color: o.zone === 'rest' ? 'var(--color-text-muted)' : undefined,
+                opacity: active ? 1 : 0.5,
+              }}>
+              {o.zone === 'rest' ? 'Rest' : o.zone.toUpperCase()}
+            </button>
+          )
+        })}
+      </div>
+      {session.zone !== 'rest' && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+          <button onClick={() => onChange({ minutes: Math.max(15, mins - 15) })} aria-label="Less time" style={stepBtnSm}>−</button>
+          <span style={{ minWidth: 54, textAlign: 'center', fontSize: 13, fontWeight: 600 }}>{fmtMin(mins)}</span>
+          <button onClick={() => onChange({ minutes: Math.min(240, mins + 15) })} aria-label="More time" style={stepBtnSm}>+</button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function NotesField({ note, onSave }) {
   const [editing, setEditing] = useState(false)
@@ -90,8 +132,9 @@ function ProgressRing({ done, total }) {
   )
 }
 
-export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, user, onToggle, onBail, onRPE, onNote }) {
+export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, user, onToggle, onBail, onRPE, onNote, onEditSession }) {
   const [openWeeks, setOpenWeeks] = useState(() => new Set([plan[0]?.num]))
+  const [editKey, setEditKey] = useState(null)
 
   function toggleWeek(num) {
     setOpenWeeks(prev => {
@@ -225,6 +268,24 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                   ? <><i className="ti ti-arrow-back-up" style={{ fontSize: 13 }} aria-hidden="true" /> Un-mark missed</>
                                   : <><i className="ti ti-circle-x" style={{ fontSize: 13 }} aria-hidden="true" /> Bail</>}
                               </button>
+                            )}
+
+                            {!isRest && onEditSession && (
+                              <button
+                                onClick={() => setEditKey(editKey === `${week.num}_${idx}` ? null : `${week.num}_${idx}`)}
+                                style={{
+                                  marginTop: 8, display: 'inline-flex', gap: 5, alignItems: 'center',
+                                  cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
+                                  padding: 0, fontSize: 11, fontWeight: 600, color: 'inherit', opacity: 0.7,
+                                  textTransform: 'uppercase', letterSpacing: '0.05em',
+                                }}
+                              >
+                                <i className={`ti ${editKey === `${week.num}_${idx}` ? 'ti-check' : 'ti-pencil'}`} style={{ fontSize: 13 }} aria-hidden="true" />
+                                {editKey === `${week.num}_${idx}` ? ' Done editing' : ' Edit session'}
+                              </button>
+                            )}
+                            {onEditSession && editKey === `${week.num}_${idx}` && (
+                              <SessionEditor session={session} onChange={patch => onEditSession(week.num, idx, patch)} />
                             )}
 
                             {state.completed && !isRest && (
