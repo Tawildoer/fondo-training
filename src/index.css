@@ -430,14 +430,16 @@ img, svg, video, canvas { max-width: 100%; }
 .progress-fill {
   height: 100%;
   border-radius: 4px;
-  background: linear-gradient(90deg, var(--color-accent), var(--color-violet) 55%, var(--color-electric));
-  background-size: 220% 100%;
+  /* Symmetric ramp (blue→violet→yellow→violet→blue): both ends match, so the
+     scroll loops seamlessly instead of snapping yellow back to blue. */
+  background: linear-gradient(90deg, var(--color-accent), var(--color-violet), var(--color-electric), var(--color-violet), var(--color-accent));
+  background-size: 200% 100%;
   transition: width 0.6s ease;
-  animation: progress-shimmer 3.5s linear infinite;
+  animation: progress-shimmer 5s linear infinite;
 }
 @keyframes progress-shimmer {
-  0%   { background-position: 0% 0; }
-  100% { background-position: 220% 0; }
+  from { background-position: 0 0; }
+  to   { background-position: -200% 0; } /* exactly one tile → seamless loop */
 }
 
 /* ── Chart bar grow-in ── */
