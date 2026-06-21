@@ -6,6 +6,16 @@ import { ZONE_OPTIONS } from '../lib/weeklyPlanner'
 import ActivityDetail from './ActivityDetail'
 
 const fmtMin = m => (m >= 90 ? `${Math.round(m / 30) * 30 / 60} hr` : `${m} min`)
+
+// Relative week label — the plan changes week to week, so absolute numbers
+// don't help. Current/next/last are named; everything else is its Monday date.
+function weekLabel(num, realCurrentWeek, dateStr) {
+  const d = num - realCurrentWeek
+  if (d === 0) return 'This week'
+  if (d === 1) return 'Next week'
+  if (d === -1) return 'Last week'
+  return `Week of ${dateStr}`
+}
 const stepBtnSm = {
   width: 26, height: 26, borderRadius: '50%', border: '0.5px solid var(--color-border-strong)',
   background: 'var(--color-surface)', color: 'var(--color-text)', fontSize: 16, lineHeight: 1,
@@ -132,7 +142,7 @@ function ProgressRing({ done, total }) {
   )
 }
 
-export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, user, onToggle, onBail, onRPE, onNote, onEditSession }) {
+export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, realCurrentWeek = 1, user, onToggle, onBail, onRPE, onNote, onEditSession }) {
   // Newest/upcoming week first so the most relevant data is at the top.
   const orderedWeeks = [...plan].sort((a, b) => b.num - a.num)
   const [openWeeks, setOpenWeeks] = useState(() => new Set([orderedWeeks[0]?.num]))
@@ -175,7 +185,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
               <ProgressRing done={doneCount} total={activeSessions.length} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, letterSpacing: '-0.01em' }}>Week {week.num}</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, letterSpacing: '-0.01em' }}>{weekLabel(week.num, realCurrentWeek, week.dateStr)}</span>
                   <span className={`tag tag-${phaseTag}`}>
                     {week.isRecovery ? 'Recovery week' : week.phaseLabel}
                   </span>
