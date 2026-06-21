@@ -57,7 +57,7 @@ export default function EventsManager({ events, onAdd, onUpdate, onDelete }) {
   function Row({ e }) {
     const dt = daysTo(e.date)
     return (
-      <div className="sess-row" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--color-surface2)' }}>
+      <div className="sess-row" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--color-surface2)', flexWrap: 'wrap' }}>
         <i className="ti ti-flag" style={{ fontSize: 16, color: 'var(--color-electric)', flexShrink: 0 }} aria-hidden="true" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 14 }}>{e.name || TYPE_LABEL[e.event_type] || 'Event'}</div>
@@ -71,8 +71,8 @@ export default function EventsManager({ events, onAdd, onUpdate, onDelete }) {
             <div style={{ fontSize: 9, color: 'var(--color-text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>days</div>
           </div>
         )}
-        <button className="btn btn-sm" onClick={() => openEdit(e)} aria-label="Edit event"><i className="ti ti-pencil" aria-hidden="true" /></button>
-        <button className="btn btn-sm btn-danger" onClick={() => onDelete(e.id)} aria-label="Delete event"><i className="ti ti-trash" aria-hidden="true" /></button>
+        <button className="btn btn-sm" onClick={() => openEdit(e)}><i className="ti ti-pencil" aria-hidden="true" /> Edit</button>
+        <button className="btn btn-sm btn-danger" onClick={() => onDelete(e.id)}><i className="ti ti-trash" aria-hidden="true" /> Delete</button>
       </div>
     )
   }

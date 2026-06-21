@@ -337,7 +337,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
       {/* Hero header */}
       <div className="hero">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 className="hero-title">{upcomingEvent?.name || 'Training plan'}</h1>
+          <h1 className="hero-title">{upcomingEvent ? `Next event: ${upcomingEvent.name || 'Event'}` : 'Training plan'}</h1>
           <p className="hero-sub">
             {user.name}{upcomingEvent?.distance_km ? ` · ${upcomingEvent.distance_km}km` : ''}{upcomingEvent?._date ? ` · ${upcomingEvent._date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
           </p>
@@ -352,8 +352,8 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
               <div className="lbl">days left</div>
             </div>
           )}
-          <button className="hero-btn" onClick={onLogout} title="Switch user" aria-label="Switch user">
-            <i className="ti ti-logout" aria-hidden="true" />
+          <button className="hero-btn" onClick={onLogout} title="Log out" style={{ gap: 6 }}>
+            <i className="ti ti-logout" aria-hidden="true" /> <span style={{ fontSize: 13, fontWeight: 600 }}>Log out</span>
           </button>
         </div>
       </div>
