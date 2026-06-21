@@ -1,7 +1,15 @@
 import { useState, useMemo } from 'react'
-import { getTodaySessions } from '../lib/schedule'
+import { getTodaySessions, getScheduledSessions } from '../lib/schedule'
 import { RPE_LABELS } from '../lib/planGenerator'
-import { computeTrainingLoad } from '../lib/trainingLoad'
+import { computeTrainingLoad, parseLeadingMinutes } from '../lib/trainingLoad'
+
+// Monday 00:00 → Sunday 23:59 of the week containing `now`.
+function thisWeekRange(now = new Date()) {
+  const dow = now.getDay()
+  const mon = new Date(now); mon.setDate(now.getDate() + (dow === 0 ? -6 : 1 - dow)); mon.setHours(0, 0, 0, 0)
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6); sun.setHours(23, 59, 59, 999)
+  return [mon, sun]
+}
 
 const PHASE_COLORS = { base: '#378ADD', build: '#639922', 'race-prep': '#534AB7', taper: '#EF9F27', recovery: '#888780' }
 const CHART_H = 150
@@ -472,8 +480,17 @@ function TrainingLoadCard({ plan, sessionState, activities, user, planStart }) {
   )
 }
 
-export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], streak, needsPlan, onPlanWeek, onToggle, onBail, onRPE, doneSessions, totalSessions, daysLeft, strava }) {
-  const pct = totalSessions ? Math.round((doneSessions / totalSessions) * 100) : 0
+export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], streak, loadCtx, needsPlan, onPlanWeek, onToggle, onBail, onRPE, doneSessions, totalSessions, daysLeft, strava }) {
+  // This-week execution — far more relevant than whole-plan totals now.
+  const [wkStart, wkEnd] = thisWeekRange()
+  const weekSessions = getScheduledSessions(plan, { base: planStart })
+    .filter(s => s.date >= wkStart && s.date <= wkEnd)
+  const isDone = s => !!sessionState[`w${s.weekNum}_${s.idx}`]?.completed
+  const plannedThisWeek = weekSessions.length
+  const doneThisWeek = weekSessions.filter(isDone).length
+  const plannedHrs = Math.round(weekSessions.reduce((a, s) => a + parseLeadingMinutes(s.session.desc), 0) / 60 * 10) / 10
+  const doneHrs = Math.round(weekSessions.filter(isDone).reduce((a, s) => a + parseLeadingMinutes(s.session.desc), 0) / 60 * 10) / 10
+  const weekPct = plannedThisWeek ? Math.round((doneThisWeek / plannedThisWeek) * 100) : 0
 
   return (
     <div>
@@ -485,19 +502,19 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
       <StravaCard strava={strava} />
 
       <div className="stats-grid">
-        <div className="stat-card"><div className="val">{plan.length}</div><div className="lbl">Weeks total</div></div>
         <div className="stat-card"><div className="val">{user.ftp ? user.ftp + 'W' : '—'}</div><div className="lbl">FTP</div></div>
-        <div className="stat-card"><div className="val">{doneSessions}/{totalSessions}</div><div className="lbl">Sessions done</div></div>
-        <div className="stat-card"><div className="val">{pct}%</div><div className="lbl">Plan complete</div></div>
+        <div className="stat-card"><div className="val">{plannedThisWeek ? `${doneThisWeek}/${plannedThisWeek}` : '—'}</div><div className="lbl">Sessions this week</div></div>
+        <div className="stat-card"><div className="val">{plannedThisWeek ? `${doneHrs}/${plannedHrs}h` : '—'}</div><div className="lbl">Hours this week</div></div>
+        <div className="stat-card"><div className="val">{loadCtx?.currentCtl || '—'}</div><div className="lbl">Fitness (CTL)</div></div>
       </div>
 
-      {/* Progress bar */}
+      {/* This-week progress bar */}
       <div style={{ marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-          <span>Overall progress</span><span>{pct}%</span>
+          <span>This week</span><span>{plannedThisWeek ? `${weekPct}%` : 'Not planned yet'}</span>
         </div>
         <div className="progress-track">
-          <div className="progress-fill" style={{ width: `${pct}%` }} />
+          <div className="progress-fill" style={{ width: `${weekPct}%` }} />
         </div>
       </div>
 
