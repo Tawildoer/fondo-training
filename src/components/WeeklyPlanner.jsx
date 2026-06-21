@@ -76,14 +76,13 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   const totalHours = Math.round((availableMinutes / 60) * 10) / 10
 
   const ctx = useMemo(() => ({
-    currentCtl: loadCtx?.currentCtl || 0,
     currentTsb: loadCtx?.currentTsb ?? null,
     recentWeeklyTss: loadCtx?.recentWeeklyTss || 0,
     weeklyHoursStart: user.weekly_hours_start || 0,
+    daysPerWeek: user.days_per_week || 5,
     weeksToEvent,
     weekNum: activeWeekNum,
-    availableMinutes,
-  }), [loadCtx, weeksToEvent, activeWeekNum, availableMinutes, user.weekly_hours_start])
+  }), [loadCtx, weeksToEvent, activeWeekNum, user.weekly_hours_start, user.days_per_week])
 
   // Live recommendation (independent of which days you pick) so you know how
   // much to aim for before you even slide the days.

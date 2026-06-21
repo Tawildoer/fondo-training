@@ -47,7 +47,8 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
   const [loading, setLoading] = useState(true)
   const autoSyncedRef = useRef(false)
 
-  const weeklyMode = user?.planning_mode === 'weekly'
+  // The fixed plan is retired — the guided weekly planner is the only mode now.
+  const weeklyMode = true
 
   const raceDate = user.event_date ? new Date(user.event_date) : null
   const daysLeft = raceDate ? Math.ceil((raceDate - new Date()) / (1000 * 60 * 60 * 24)) : null
@@ -272,22 +273,13 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
   const totalSessions = adjustedPlan.reduce((a, w) => a + w.sessions.filter(s => s.zone !== 'rest').length, 0)
   const doneSessions = Object.values(sessionState).filter(s => s?.completed).length
 
-  const TABS = weeklyMode
-    ? [
-        { id: 'overview', label: 'Overview' },
-        { id: 'plan-week', label: 'Plan week' },
-        { id: 'calendar', label: 'Calendar' },
-        { id: 'training', label: 'Training weeks' },
-        { id: 'zones', label: 'Power zones' },
-      ]
-    : [
-        { id: 'overview', label: 'Overview' },
-        { id: 'calendar', label: 'Calendar' },
-        { id: 'training', label: 'Training weeks' },
-        { id: 'guide', label: 'Plan guide' },
-        { id: 'zones', label: 'Power zones' },
-        { id: 'adjustments', label: 'Adjustments' },
-      ]
+  const TABS = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'plan-week', label: 'Plan week' },
+    { id: 'calendar', label: 'Calendar' },
+    { id: 'training', label: 'Training weeks' },
+    { id: 'zones', label: 'Power zones' },
+  ]
 
   return (
     <div className="app-shell">
@@ -313,13 +305,6 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
             <i className="ti ti-logout" aria-hidden="true" />
           </button>
         </div>
-      </div>
-
-      {/* Planning-mode toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1rem', fontSize: 12, color: 'var(--color-text-muted)' }}>
-        <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Planning</span>
-        <button className={`btn btn-sm ${!weeklyMode ? 'btn-primary' : ''}`} onClick={() => handleSetMode('fixed')}>Fixed plan</button>
-        <button className={`btn btn-sm ${weeklyMode ? 'btn-primary' : ''}`} onClick={() => handleSetMode('weekly')}>Guided weekly</button>
       </div>
 
       <div className="tabs">

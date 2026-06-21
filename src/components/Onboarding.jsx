@@ -46,7 +46,7 @@ export default function Onboarding({ authUser, onComplete }) {
     riding_strength: '',
     weekly_hours_start: '6',
     days_per_week: '5',
-    planning_mode: 'fixed',
+    planning_mode: 'weekly',
     fitness_goal: 'build',
   })
 
@@ -258,46 +258,23 @@ export default function Onboarding({ authUser, onComplete }) {
             </div>
 
             <div className="field" style={{ marginTop: '1.5rem' }}>
-              <label>Planning style</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {[
-                  { v: 'fixed', label: 'Fixed plan', desc: 'A full periodised plan built up front, with adaptive tweaks.' },
-                  { v: 'weekly', label: 'Guided weekly', desc: 'Plan week-to-week around your real schedule. Most flexible.' },
-                ].map(o => (
-                  <button key={o.v} onClick={() => set('planning_mode', o.v)}
+              <label>Your goal right now</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[{ v: 'maintain', label: 'Maintain fitness' }, { v: 'build', label: 'Build fitness' }].map(o => (
+                  <button key={o.v} onClick={() => set('fitness_goal', o.v)}
                     style={{
-                      padding: '10px 14px', borderRadius: 'var(--radius-sm)',
-                      border: `1.5px solid ${form.planning_mode === o.v ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                      background: form.planning_mode === o.v ? 'var(--color-accent-light)' : 'var(--color-surface2)',
-                      color: form.planning_mode === o.v ? 'var(--color-accent-text)' : 'var(--color-text)',
-                      cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+                      flex: 1, padding: '10px 6px', borderRadius: 'var(--radius-sm)',
+                      border: `1.5px solid ${form.fitness_goal === o.v ? 'var(--color-accent)' : 'var(--color-border)'}`,
+                      background: form.fitness_goal === o.v ? 'var(--color-accent-light)' : 'var(--color-surface2)',
+                      color: form.fitness_goal === o.v ? 'var(--color-accent-text)' : 'var(--color-text)',
+                      cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
                     }}>
-                    <div style={{ fontWeight: 600, marginBottom: 1 }}>{o.label}</div>
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>{o.desc}</div>
+                    {o.label}
                   </button>
                 ))}
               </div>
+              <div className="hint">You'll plan each week around your real schedule — change this anytime.</div>
             </div>
-
-            {form.planning_mode === 'weekly' && (
-              <div className="field">
-                <label>Goal</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {[{ v: 'maintain', label: 'Maintain fitness' }, { v: 'build', label: 'Build fitness' }].map(o => (
-                    <button key={o.v} onClick={() => set('fitness_goal', o.v)}
-                      style={{
-                        flex: 1, padding: '10px 6px', borderRadius: 'var(--radius-sm)',
-                        border: `1.5px solid ${form.fitness_goal === o.v ? 'var(--color-accent)' : 'var(--color-border)'}`,
-                        background: form.fitness_goal === o.v ? 'var(--color-accent-light)' : 'var(--color-surface2)',
-                        color: form.fitness_goal === o.v ? 'var(--color-accent-text)' : 'var(--color-text)',
-                        cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
-                      }}>
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem' }}>
               <button className="btn" onClick={back}><i className="ti ti-arrow-left" aria-hidden="true" /> Back</button>

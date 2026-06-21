@@ -22,67 +22,69 @@ export function tssFor(zone, minutes) {
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
 // ── 1. Weekly load target ────────────────────────────────────
-// `ctx` = { currentCtl, recentWeeklyTss, weeksToEvent (null if no event),
-//           weekNum, availableMinutes }
+// Self-contained weekly volume model — works entirely from the athlete's
+// profile and real data, with no dependency on the (now-retired) fixed plan.
+// `ctx` = { currentTsb, recentWeeklyTss, weeklyHoursStart, daysPerWeek,
+//           weeksToEvent (null if no event), weekNum }
+const TSS_PER_HOUR = 52 // endurance-weighted blended week
+
 export function computeWeekTarget(inputs, ctx = {}) {
   const { goal = 'build', freshness = 3, focus = 'none', busy = false } = inputs || {}
-  const { currentCtl = 0, currentTsb = null, recentWeeklyTss = 0, weeklyHoursStart = 0, weeksToEvent = null, weekNum = 1, availableMinutes = 0 } = ctx
+  const { currentTsb = null, recentWeeklyTss = 0, weeklyHoursStart = 0, daysPerWeek = 5, weeksToEvent = null, weekNum = 1 } = ctx
 
-  // Baseline = what you've been doing (best signal), else maintain current
-  // fitness (CTL≈mean daily TSS, so a maintaining week ≈ CTL×7), else your
-  // stated starting volume, else a rough estimate from time made available.
-  let baseline = recentWeeklyTss > 0 ? recentWeeklyTss
-    : currentCtl > 0 ? currentCtl * 7
-    : weeklyHoursStart > 0 ? tssFor('z2', weeklyHoursStart * 60)
-    : tssFor('z2', availableMinutes) || 250
+  // Where you start and a sustainable ceiling (classic ~1.8× start, capped by
+  // how many days you ride). Pure sports-science heuristics on your profile.
+  const startHours = weeklyHoursStart > 0 ? weeklyHoursStart : 6
+  const maxHours = Math.min(startHours * 1.8, daysPerWeek * 3)
+  const recentHours = recentWeeklyTss > 0 ? recentWeeklyTss / TSS_PER_HOUR : 0
 
-  // A recovery week resets the block: when you ask for one, on a scheduled
-  // 4-week cadence, or when fatigue is deep (form well into the red).
-  const deeplyFatigued = currentTsb != null && currentTsb <= -25
-  const isRecovery = focus === 'recovery' || (weekNum > 0 && weekNum % 4 === 0) || deeplyFatigued
+  // Progressive build ramp from your starting volume toward the ceiling,
+  // reaching it ~8 weeks in. Adapts upward to real load so it never undershoots
+  // a fitness level you've clearly already got.
+  const progress = clamp((weekNum - 1) / 8, 0, 1)
+  const rampHours = startHours + (maxHours - startHours) * progress
 
-  // Macro factor: event periodization wins when an event is set, otherwise the
-  // maintain/build goal drives it.
-  let macro
   let phase
-  if (weeksToEvent != null) {
-    if (weeksToEvent <= 0) { macro = 0.5; phase = 'Race week' }
-    else if (weeksToEvent === 1) { macro = 0.6; phase = 'Taper' }
-    else if (weeksToEvent === 2) { macro = 0.8; phase = 'Taper' }
-    else if (weeksToEvent <= 8) { macro = 1.08; phase = 'Peak build' } // volume ramps up
-    else { macro = goal === 'build' ? 1.05 : 1.0; phase = 'Base build' }
+  let baseHours
+  if (goal === 'maintain') {
+    baseHours = Math.max(startHours, recentHours)
+    phase = 'Maintain'
   } else {
-    macro = goal === 'build' ? 1.06 : 1.0
-    phase = goal === 'build' ? 'Build' : 'Maintain'
+    baseHours = Math.max(rampHours, recentHours)
+    phase = 'Build'
   }
 
+  // Event periodization overlay: push volume in the peak window, taper in.
+  let eventFactor = 1
+  if (weeksToEvent != null) {
+    if (weeksToEvent <= 0) { eventFactor = 0.5; phase = 'Race week' }
+    else if (weeksToEvent === 1) { eventFactor = 0.6; phase = 'Taper' }
+    else if (weeksToEvent === 2) { eventFactor = 0.8; phase = 'Taper' }
+    else if (weeksToEvent <= 8) { eventFactor = 1.05; phase = 'Peak build' }
+    else phase = 'Base build'
+  }
+
+  // Recovery week + subjective modifiers.
+  const deeplyFatigued = currentTsb != null && currentTsb <= -25
+  const isRecovery = focus === 'recovery' || deeplyFatigued || (weekNum > 0 && weekNum % 4 === 0)
   const freshnessFactor = [0.85, 0.85, 0.92, 1.0, 1.05, 1.1][clamp(freshness, 1, 5)]
   const busyFactor = busy ? 0.7 : 1
 
-  let factor = macro * freshnessFactor * busyFactor
-  if (isRecovery) { factor = 0.55 * busyFactor; phase = 'Recovery' }
+  let factor = eventFactor * freshnessFactor * busyFactor
+  if (isRecovery) { factor = 0.6 * busyFactor; phase = 'Recovery' }
 
-  let target = baseline * factor
-  // Safety ramp cap: don't jump volume more than ~12% week-on-week (recovery /
-  // taper are allowed to drop below the floor).
-  if (!isRecovery && weeksToEvent == null || (weeksToEvent != null && weeksToEvent > 2)) {
-    target = clamp(target, baseline * 0.5, baseline * 1.12)
-  }
+  let targetHours = baseHours * factor
+  targetHours = clamp(targetHours, startHours * (isRecovery ? 0.4 : 0.5), maxHours * 1.05)
+  targetHours = Math.round(targetHours * 2) / 2
 
   return {
-    targetTss: Math.round(target),
-    targetHours: hoursForTss(target),
+    targetHours,
+    targetTss: Math.round(targetHours * TSS_PER_HOUR),
     isRecovery,
     phase,
     hardDays: isRecovery ? 0 : hardDaysFor(focus, weeksToEvent, inputs),
     note: buildNote({ phase, goal, weeksToEvent, isRecovery, busy, deeplyFatigued }),
   }
-}
-
-// Rough TSS→hours so we can suggest a weekly volume. Assumes a typical
-// endurance-weighted week (~0.72 IF blended → ~52 TSS/hr).
-export function hoursForTss(tss) {
-  return Math.max(0.5, Math.round((tss / 52) * 2) / 2)
 }
 
 // Rough projection of where this week's load leaves your fitness (CTL), so the
@@ -114,7 +116,7 @@ function buildNote({ phase, goal, weeksToEvent, isRecovery, busy, deeplyFatigued
   if (weeksToEvent != null && weeksToEvent <= 2) return `Tapering — ${weeksToEvent} week${weeksToEvent === 1 ? '' : 's'} out. Volume drops, legs stay sharp.`
   if (weeksToEvent != null && weeksToEvent <= 8) return 'Peak build — volume ramps up as your event approaches.'
   if (busy) return 'Busy week — volume trimmed to protect recovery and consistency.'
-  return goal === 'build' ? 'Building fitness — a small progressive overload on recent load.' : 'Maintaining fitness — holding your current load steady.'
+  return goal === 'build' ? 'Building fitness — volume steps up progressively each week toward a sustainable ceiling.' : 'Maintaining fitness — holding your current volume steady.'
 }
 
 // ── 2. Draft the week ────────────────────────────────────────
