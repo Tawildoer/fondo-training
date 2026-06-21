@@ -75,6 +75,20 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   const availDays = DAY_NAMES.filter(d => (inputs.days[d] || 0) > 0).length
   const totalHours = Math.round((availableMinutes / 60) * 10) / 10
 
+  const ctx = useMemo(() => ({
+    currentCtl: loadCtx?.currentCtl || 0,
+    currentTsb: loadCtx?.currentTsb ?? null,
+    recentWeeklyTss: loadCtx?.recentWeeklyTss || 0,
+    weeklyHoursStart: user.weekly_hours_start || 0,
+    weeksToEvent,
+    weekNum: activeWeekNum,
+    availableMinutes,
+  }), [loadCtx, weeksToEvent, activeWeekNum, availableMinutes, user.weekly_hours_start])
+
+  // Live recommendation (independent of which days you pick) so you know how
+  // much to aim for before you even slide the days.
+  const suggestion = useMemo(() => computeWeekTarget(inputs, ctx), [inputs, ctx])
+
   const weekLabel = weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
   function setDay(day, minutes) {
@@ -82,14 +96,6 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   }
 
   function generate() {
-    const ctx = {
-      currentCtl: loadCtx?.currentCtl || 0,
-      currentTsb: loadCtx?.currentTsb ?? null,
-      recentWeeklyTss: loadCtx?.recentWeeklyTss || 0,
-      weeksToEvent,
-      weekNum: activeWeekNum,
-      availableMinutes,
-    }
     const t = computeWeekTarget(inputs, ctx)
     setTarget(t)
     setDraft(draftWeek(t, inputs, user.ftp))
@@ -163,7 +169,28 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
           {/* Constraints */}
           <div className="card">
             <h2>How much can you ride?</h2>
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: -4, marginBottom: 16 }}>
+
+            {/* Strong volume suggestion (event-aware) */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', marginBottom: 16,
+              borderRadius: 'var(--radius-sm)', background: 'var(--grad-hero)', color: '#fff',
+            }}>
+              <i className="ti ti-target-arrow" style={{ fontSize: 26, color: 'var(--color-electric)', flexShrink: 0 }} aria-hidden="true" />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.8 }}>
+                  Suggested this week · {suggestion.phase}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                    ~{suggestion.targetHours} h
+                  </span>
+                  <span style={{ fontSize: 12, opacity: 0.85 }}>≈ {suggestion.targetTss} TSS · you've set {totalHours} h</span>
+                </div>
+                <div style={{ fontSize: 12, opacity: 0.9, marginTop: 3, lineHeight: 1.4 }}>{suggestion.note}</div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 16 }}>
               Slide each day to the time you've got. We've started you off — just adjust what's changed.
             </p>
 
@@ -218,9 +245,14 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
 
                 <div className="field">
                   <label>Focus</label>
-                  <select value={inputs.focus} onChange={e => setInputs(p => ({ ...p, focus: e.target.value }))} style={selectStyle}>
-                    {FOCUS_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.label}</option>)}
-                  </select>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {FOCUS_OPTIONS.map(o => (
+                      <button key={o.v} onClick={() => setInputs(p => ({ ...p, focus: o.v }))}
+                        className={`btn btn-sm ${inputs.focus === o.v ? 'btn-primary' : ''}`}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
@@ -277,14 +309,31 @@ function SessionList({ sessions, ftp, editable, onEdit }) {
           </div>
           {s.zone !== 'rest' && <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{s.desc}</div>}
           {editable && (
-            <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <select value={s.zone} onChange={e => onEdit(i, { zone: e.target.value })} style={{ ...selectStyle, width: 'auto', padding: '4px 8px', fontSize: 12 }}>
-                {ZONE_OPTIONS.map(o => <option key={o.zone} value={o.zone}>{o.label}</option>)}
-              </select>
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                {ZONE_OPTIONS.map(o => {
+                  const active = s.zone === o.zone
+                  return (
+                    <button key={o.zone} onClick={() => onEdit(i, { zone: o.zone })}
+                      className={o.zone === 'rest' ? '' : `sess-${o.zone}`}
+                      style={{
+                        padding: '3px 9px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                        border: `1.5px solid ${active ? 'currentColor' : 'transparent'}`,
+                        background: o.zone === 'rest' ? 'var(--color-surface2)' : undefined,
+                        color: o.zone === 'rest' ? 'var(--color-text-muted)' : undefined,
+                        opacity: active ? 1 : 0.5, transition: 'opacity 0.12s',
+                      }}>
+                      {o.zone === 'rest' ? 'Rest' : o.zone.toUpperCase()}
+                    </button>
+                  )
+                })}
+              </div>
               {s.zone !== 'rest' && (
-                <select value={s.durationMin || 60} onChange={e => onEdit(i, { minutes: +e.target.value })} style={{ ...selectStyle, width: 'auto', padding: '4px 8px', fontSize: 12 }}>
-                  {[30, 45, 60, 75, 90, 120, 150, 180, 240].map(v => <option key={v} value={v}>{fmtTime(v)}</option>)}
-                </select>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+                  <button onClick={() => onEdit(i, { minutes: Math.max(15, (s.durationMin || 60) - 15) })} aria-label="Less time" style={stepBtn}>−</button>
+                  <span style={{ minWidth: 56, textAlign: 'center', fontSize: 13, fontWeight: 600 }}>{fmtTime(s.durationMin || 60)}</span>
+                  <button onClick={() => onEdit(i, { minutes: Math.min(240, (s.durationMin || 60) + 15) })} aria-label="More time" style={stepBtn}>+</button>
+                </div>
               )}
             </div>
           )}
@@ -306,8 +355,8 @@ function Segmented({ value, onChange, options }) {
   )
 }
 
-const selectStyle = {
-  width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-sm)',
-  border: '0.5px solid var(--color-border-strong)', background: 'var(--color-surface2)',
-  color: 'var(--color-text)', fontSize: 14, fontFamily: 'inherit', outline: 'none',
+const stepBtn = {
+  width: 30, height: 30, borderRadius: '50%', border: '0.5px solid var(--color-border-strong)',
+  background: 'var(--color-surface2)', color: 'var(--color-text)', fontSize: 18, lineHeight: 1,
+  cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
 }

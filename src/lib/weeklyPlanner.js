@@ -26,13 +26,14 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 //           weekNum, availableMinutes }
 export function computeWeekTarget(inputs, ctx = {}) {
   const { goal = 'build', freshness = 3, focus = 'none', busy = false } = inputs || {}
-  const { currentCtl = 0, currentTsb = null, recentWeeklyTss = 0, weeksToEvent = null, weekNum = 1, availableMinutes = 0 } = ctx
+  const { currentCtl = 0, currentTsb = null, recentWeeklyTss = 0, weeklyHoursStart = 0, weeksToEvent = null, weekNum = 1, availableMinutes = 0 } = ctx
 
   // Baseline = what you've been doing (best signal), else maintain current
-  // fitness (CTL≈mean daily TSS, so a maintaining week ≈ CTL×7), else a rough
-  // estimate from the time you've made available (assume mostly endurance).
+  // fitness (CTL≈mean daily TSS, so a maintaining week ≈ CTL×7), else your
+  // stated starting volume, else a rough estimate from time made available.
   let baseline = recentWeeklyTss > 0 ? recentWeeklyTss
     : currentCtl > 0 ? currentCtl * 7
+    : weeklyHoursStart > 0 ? tssFor('z2', weeklyHoursStart * 60)
     : tssFor('z2', availableMinutes) || 250
 
   // A recovery week resets the block: when you ask for one, on a scheduled
@@ -70,11 +71,18 @@ export function computeWeekTarget(inputs, ctx = {}) {
 
   return {
     targetTss: Math.round(target),
+    targetHours: hoursForTss(target),
     isRecovery,
     phase,
     hardDays: isRecovery ? 0 : hardDaysFor(focus, weeksToEvent, inputs),
     note: buildNote({ phase, goal, weeksToEvent, isRecovery, busy, deeplyFatigued }),
   }
+}
+
+// Rough TSS→hours so we can suggest a weekly volume. Assumes a typical
+// endurance-weighted week (~0.72 IF blended → ~52 TSS/hr).
+export function hoursForTss(tss) {
+  return Math.max(0.5, Math.round((tss / 52) * 2) / 2)
 }
 
 // Rough projection of where this week's load leaves your fitness (CTL), so the
