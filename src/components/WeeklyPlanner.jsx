@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { localDateStr } from '../lib/schedule'
+import { localDateStr, nextEvent } from '../lib/schedule'
 import {
   computeWeekTarget, draftWeek, projectCtl,
   ZONE_OPTIONS, DAY_NAMES, TIER_MIN, TIER_LABEL,
@@ -104,7 +104,7 @@ function defaultInputs(plannedWeeks, user, minHard = 2) {
   return ensureHardDays(base, minHard)
 }
 
-export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, loadCtx, onSave, onDelete, onGenerated }) {
+export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, events = [], loadCtx, onSave, onDelete, onGenerated }) {
   // On the weekend the current (Mon-anchored) week is basically done, so
   // default to planning next week — the one you're about to ride.
   const [offset, setOffset] = useState(() => ([0, 6].includes(new Date().getDay()) ? 1 : 0))
@@ -115,8 +115,9 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   const [inputs, setInputs] = useState(() => {
     const off = [0, 6].includes(new Date().getDay()) ? 1 : 0
     const ws = mondayOfWeek(planStart, weekNum + off)
-    const wte = user.event_date
-      ? Math.max(0, Math.round((mondayOf(new Date(user.event_date)) - ws) / (7 * 86400000)))
+    const ev0 = nextEvent(events, ws)
+    const wte = ev0?._date
+      ? Math.max(0, Math.round((mondayOf(ev0._date) - ws) / (7 * 86400000)))
       : null
     return defaultInputs(plannedWeeks, user, recommendedHardDays(wte, user.fitness_goal))
   })
@@ -124,9 +125,9 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   const [saving, setSaving] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
 
-  const eventDate = user.event_date ? new Date(user.event_date) : null
-  const weeksToEvent = eventDate
-    ? Math.max(0, Math.round((mondayOf(eventDate) - weekStart) / (7 * 86400000)))
+  const ev = nextEvent(events, weekStart)
+  const weeksToEvent = ev?._date
+    ? Math.max(0, Math.round((mondayOf(ev._date) - weekStart) / (7 * 86400000)))
     : null
   const availableMinutes = DAY_NAMES.reduce((s, d) => s + (inputs.days[d] ? TIER_MIN[inputs.days[d].length] : 0), 0)
   const availDays = DAY_NAMES.filter(d => inputs.days[d]).length

@@ -162,6 +162,41 @@ export async function deletePlannedWeek(userId, weekNum) {
   return !error
 }
 
+// ── Events (goal events) ─────────────────────────────────────
+
+export async function loadEvents(userId) {
+  const { data } = await supabase
+    .from('events')
+    .select('*')
+    .eq('user_id', userId)
+    .order('date', { ascending: true })
+  return data || []
+}
+
+export async function addEvent(userId, fields) {
+  const { data, error } = await supabase
+    .from('events')
+    .insert({ user_id: userId, ...fields })
+    .select()
+    .single()
+  return error ? null : data
+}
+
+export async function updateEvent(id, fields) {
+  const { data, error } = await supabase
+    .from('events')
+    .update(fields)
+    .eq('id', id)
+    .select()
+    .single()
+  return error ? null : data
+}
+
+export async function deleteEvent(id) {
+  const { error } = await supabase.from('events').delete().eq('id', id)
+  return !error
+}
+
 // ── Adjustments ──────────────────────────────────────────────
 
 export async function loadAdjustments(userId) {

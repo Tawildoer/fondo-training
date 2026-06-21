@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { getScheduledSessions, downloadICS } from '../lib/schedule'
+import { getScheduledSessions, downloadICS, parseLocalDate } from '../lib/schedule'
+import EventsManager from './EventsManager'
 
 const ZONE_COLORS = {
   z1: { bg: 'var(--zone-z1-bg)', text: 'var(--zone-z1-fg)', label: 'Recovery' },
@@ -24,13 +25,22 @@ function buildSessionsByDate(plan, sessionState, base) {
   return map
 }
 
-export default function CalendarView({ plan, sessionState, planStart, eventName }) {
+export default function CalendarView({ plan, sessionState, planStart, eventName, events = [], onAddEvent, onUpdateEvent, onDeleteEvent }) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
   const [tooltip, setTooltip] = useState(null) // { key, idx }
 
   const sessionsByDate = buildSessionsByDate(plan, sessionState, planStart)
+
+  // Events keyed the same way as calendar cells (toISOString of local midnight).
+  const eventsByDate = {}
+  events.forEach(e => {
+    const d = parseLocalDate(e.date)
+    if (!d) return
+    const key = d.toISOString().slice(0, 10)
+    ;(eventsByDate[key] = eventsByDate[key] || []).push(e)
+  })
 
   const firstDay = new Date(viewYear, viewMonth, 1)
   const lastDay = new Date(viewYear, viewMonth + 1, 0)
@@ -62,6 +72,10 @@ export default function CalendarView({ plan, sessionState, planStart, eventName 
 
   return (
     <div>
+      {onAddEvent && (
+        <EventsManager events={events} onAdd={onAddEvent} onUpdate={onUpdateEvent} onDelete={onDeleteEvent} />
+      )}
+
       {/* Export */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
         <button className="btn btn-sm" onClick={() => downloadICS(plan, eventName || 'Training Plan', planStart)}>
@@ -145,6 +159,17 @@ export default function CalendarView({ plan, sessionState, planStart, eventName 
               }}>
                 {cell.dayNum}
               </div>
+
+              {/* Event marker */}
+              {eventsByDate[cell.key] && (
+                <div style={{
+                  fontSize: 8, fontWeight: 700, color: '#241f0e', background: 'var(--color-electric)',
+                  borderRadius: 3, padding: '1px 4px', lineHeight: 1.35, marginBottom: 1,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }} title={eventsByDate[cell.key].map(e => e.name || 'Event').join(', ')}>
+                  🏁 {eventsByDate[cell.key][0].name || 'Event'}
+                </div>
+              )}
 
               {/* Session chips */}
               {cell.sessions.map((s, si) => {

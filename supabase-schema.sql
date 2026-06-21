@@ -134,11 +134,28 @@ create table planned_weeks (
 --   create policy "planned_weeks_all" on planned_weeks for all using (
 --     user_id in (select id from users where auth_id = auth.uid()));
 
+-- 8. Events (multiple goal events; the plan periodizes toward the nearest one).
+create table events (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  name text,
+  date date not null,
+  event_type text,
+  distance_km int,
+  created_at timestamptz default now()
+);
+-- Migration for existing databases (safe to re-run):
+--   create table if not exists events ( ... as above ... );
+--   alter table events enable row level security;
+--   create policy "events_all" on events for all using (
+--     user_id in (select id from users where auth_id = auth.uid()));
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================
 
 alter table users enable row level security;
+alter table events enable row level security;
 alter table session_state enable row level security;
 alter table adjustments enable row level security;
 alter table ftp_history enable row level security;
@@ -171,6 +188,10 @@ create policy "activities_all" on activities for all using (
 );
 
 create policy "planned_weeks_all" on planned_weeks for all using (
+  user_id in (select id from users where auth_id = auth.uid())
+);
+
+create policy "events_all" on events for all using (
   user_id in (select id from users where auth_id = auth.uid())
 );
 

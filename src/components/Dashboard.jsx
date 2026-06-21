@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { generatePlan, computeAdaptation, applyAdaptation } from '../lib/planGenerator'
-import { getPlanStart, getCurrentWeekNum, getUnconfirmedSessions, computeStreak, localDateStr } from '../lib/schedule'
+import { getPlanStart, getCurrentWeekNum, getUnconfirmedSessions, computeStreak, localDateStr, nextEvent } from '../lib/schedule'
 import { celebrate } from '../lib/celebrate'
 import { parseLeadingMinutes, computeTrainingLoad } from '../lib/trainingLoad'
-import { loadSessionState, upsertSessionState, loadAdjustments, addAdjustment, deleteAdjustment, updateUser, loadFtpHistory, addFtpEntry, getStravaAccount, loadActivities, loadPlannedWeeks, upsertPlannedWeek, deletePlannedWeek } from '../lib/supabase'
+import { loadSessionState, upsertSessionState, loadAdjustments, addAdjustment, deleteAdjustment, updateUser, loadFtpHistory, addFtpEntry, getStravaAccount, loadActivities, loadPlannedWeeks, upsertPlannedWeek, deletePlannedWeek, loadEvents, addEvent, updateEvent, deleteEvent } from '../lib/supabase'
 import { syncStrava, getStravaAuthUrl, stravaConfigured, getStravaAutoCompletions } from '../lib/strava'
 import TrainingWeeks from './TrainingWeeks'
 import PowerZones from './PowerZones'
@@ -43,6 +43,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
   const [activities, setActivities] = useState([])
   const [stravaAccount, setStravaAccount] = useState(null)
   const [plannedWeeks, setPlannedWeeks] = useState([])
+  const [events, setEvents] = useState([])
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
   const [loading, setLoading] = useState(true)
@@ -51,8 +52,13 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
   // The fixed plan is retired — the guided weekly planner is the only mode now.
   const weeklyMode = true
 
-  const raceDate = user.event_date ? new Date(user.event_date) : null
-  const daysLeft = raceDate ? Math.ceil((raceDate - new Date()) / (1000 * 60 * 60 * 24)) : null
+  // Effective events: the events table, falling back to a legacy profile event
+  // (so nothing regresses before the backfill/migration runs).
+  const effectiveEvents = events.length
+    ? events
+    : (user?.event_date ? [{ id: 'legacy', name: user.event_name, date: user.event_date, event_type: user.event_type, distance_km: user.event_distance_km }] : [])
+  const upcomingEvent = nextEvent(effectiveEvents)
+  const daysLeft = upcomingEvent?._date ? Math.ceil((upcomingEvent._date - new Date()) / (1000 * 60 * 60 * 24)) : null
 
   // Plan source depends on mode: weekly mode reconstructs from persisted
   // bespoke weeks; fixed mode generates the template plan from the profile.
@@ -79,7 +85,8 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
       getStravaAccount(user.id),
       loadActivities(user.id),
       loadPlannedWeeks(user.id),
-    ]).then(([sessions, adjs, ftps, strava, acts, weeks]) => {
+      loadEvents(user.id),
+    ]).then(([sessions, adjs, ftps, strava, acts, weeks, evs]) => {
       const stateMap = {}
       sessions.forEach(s => {
         const key = `w${s.week_num}_${s.session_idx}`
@@ -91,9 +98,22 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
       setStravaAccount(strava)
       setActivities(acts)
       setPlannedWeeks(weeks)
+      setEvents(evs)
       setLoading(false)
     })
   }, [user?.id])
+
+  // One-time backfill: move a legacy single event from the profile into the
+  // events table so multi-event management has it.
+  const eventBackfilledRef = useRef(false)
+  useEffect(() => {
+    if (loading || eventBackfilledRef.current) return
+    if (events.length === 0 && user?.event_date) {
+      eventBackfilledRef.current = true
+      addEvent(user.id, { name: user.event_name || null, date: user.event_date, event_type: user.event_type || null, distance_km: user.event_distance_km || null })
+        .then(ev => { if (ev) setEvents([ev]) })
+    }
+  }, [loading, events.length, user?.id, user?.event_date])
 
   // Annotate session state with zone (from plan)
   useEffect(() => {
@@ -196,6 +216,19 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     const sessions = row.sessions.map((s, i) => (i === idx ? updated : s))
     const saved = await upsertPlannedWeek(user.id, weekNumE, { sessions })
     if (saved) setPlannedWeeks(prev => prev.map(w => (w.week_num === weekNumE ? saved : w)))
+  }
+
+  async function handleAddEvent(fields) {
+    const ev = await addEvent(user.id, fields)
+    if (ev) setEvents(prev => [...prev, ev].sort((a, b) => a.date.localeCompare(b.date)))
+  }
+  async function handleUpdateEvent(id, fields) {
+    const ev = await updateEvent(id, fields)
+    if (ev) setEvents(prev => prev.map(e => (e.id === id ? ev : e)).sort((a, b) => a.date.localeCompare(b.date)))
+  }
+  async function handleDeleteEvent(id) {
+    await deleteEvent(id)
+    setEvents(prev => prev.filter(e => e.id !== id))
   }
 
   async function handleSetMode(mode) {
@@ -304,9 +337,9 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
       {/* Hero header */}
       <div className="hero">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 className="hero-title">{user.event_name || 'Training Plan'}</h1>
+          <h1 className="hero-title">{upcomingEvent?.name || 'Training plan'}</h1>
           <p className="hero-sub">
-            {user.name}{user.event_distance_km ? ` · ${user.event_distance_km}km` : ''}{user.event_date ? ` · ${new Date(user.event_date).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+            {user.name}{upcomingEvent?.distance_km ? ` · ${upcomingEvent.distance_km}km` : ''}{upcomingEvent?._date ? ` · ${upcomingEvent._date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
           </p>
           {streak?.current > 0 && (
             <span className="hero-streak"><span aria-hidden="true">🔥</span> {streak.current} session{streak.current === 1 ? '' : 's'} in a row</span>
@@ -342,8 +375,8 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
           {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} activities={activities} streak={streak} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
             needsPlan={weeklyMode && !currentWeekPlanned} onPlanWeek={() => setTab('plan-week')}
             strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }} />}
-          {tab === 'plan-week' && weeklyMode && <WeeklyPlanner user={user} planStart={planStart} weekNum={realCurrentWeek} plannedWeeks={plannedWeeks} loadCtx={loadCtx} onSave={handleSaveWeek} onDelete={handleDeleteWeek} onGenerated={() => setTab('training')} />}
-          {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={user.event_name} />}
+          {tab === 'plan-week' && weeklyMode && <WeeklyPlanner user={user} planStart={planStart} weekNum={realCurrentWeek} plannedWeeks={plannedWeeks} events={effectiveEvents} loadCtx={loadCtx} onSave={handleSaveWeek} onDelete={handleDeleteWeek} onGenerated={() => setTab('training')} />}
+          {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={upcomingEvent?.name} events={effectiveEvents} onAddEvent={handleAddEvent} onUpdateEvent={handleUpdateEvent} onDeleteEvent={handleDeleteEvent} />}
           {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} realCurrentWeek={realCurrentWeek} user={user} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} onEditSession={handleEditSession} />}
           {tab === 'guide' && <PlanGuide plan={adjustedPlan} user={user} />}
           {tab === 'zones' && <PowerZones user={user} onUpdateFTP={handleUpdateFTP} ftpHistory={ftpHistory} />}

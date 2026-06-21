@@ -102,6 +102,24 @@ export function getUnconfirmedSessions(plan, sessionState, planStart, base = new
     .sort((a, b) => a.date - b.date)
 }
 
+// ── Events ───────────────────────────────────────────────────
+// The nearest event on or after `from` (the one the plan periodizes toward).
+export function nextEvent(events, from = new Date()) {
+  const f = new Date(from)
+  f.setHours(0, 0, 0, 0)
+  return [...(events || [])]
+    .map(e => ({ ...e, _date: parseLocalDate(e.date) }))
+    .filter(e => e._date && e._date.getTime() >= f.getTime())
+    .sort((a, b) => a._date - b._date)[0] || null
+}
+
+// Whole-week count from `fromMonday` to the event's week (0 = event this week).
+export function weeksToEventFrom(event, fromMonday) {
+  if (!event?._date) return null
+  const evMon = mondayOf(event._date)
+  return Math.max(0, Math.round((evMon - fromMonday) / (7 * 24 * 60 * 60 * 1000)))
+}
+
 // ── Streak ───────────────────────────────────────────────────
 // Consecutive completed non-rest sessions, in date order, up to today.
 // Only an explicit bail breaks a streak — pending (unconfirmed) sessions are
