@@ -133,7 +133,9 @@ function ProgressRing({ done, total }) {
 }
 
 export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, user, onToggle, onBail, onRPE, onNote, onEditSession }) {
-  const [openWeeks, setOpenWeeks] = useState(() => new Set([plan[0]?.num]))
+  // Newest/upcoming week first so the most relevant data is at the top.
+  const orderedWeeks = [...plan].sort((a, b) => b.num - a.num)
+  const [openWeeks, setOpenWeeks] = useState(() => new Set([orderedWeeks[0]?.num]))
   const [editKey, setEditKey] = useState(null)
 
   function toggleWeek(num) {
@@ -147,7 +149,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
 
   return (
     <div>
-      {plan.map(week => {
+      {orderedWeeks.map(week => {
         const activeSessions = week.sessions
           .map((s, i) => ({ s, i }))
           .filter(({ s }) => s.zone !== 'rest')
