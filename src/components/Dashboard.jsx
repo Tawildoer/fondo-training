@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { generatePlan, computeAdaptation, applyAdaptation } from '../lib/planGenerator'
 import { getPlanStart, getCurrentWeekNum, getUnconfirmedSessions, computeStreak, localDateStr } from '../lib/schedule'
 import { celebrate } from '../lib/celebrate'
-import { loadSessionState, upsertSessionState, loadAdjustments, addAdjustment, deleteAdjustment, updateUser, loadFtpHistory, addFtpEntry, getStravaAccount, loadActivities } from '../lib/supabase'
+import { parseLeadingMinutes, computeTrainingLoad } from '../lib/trainingLoad'
+import { loadSessionState, upsertSessionState, loadAdjustments, addAdjustment, deleteAdjustment, updateUser, loadFtpHistory, addFtpEntry, getStravaAccount, loadActivities, loadPlannedWeeks, upsertPlannedWeek, deletePlannedWeek } from '../lib/supabase'
 import { syncStrava, getStravaAuthUrl, stravaConfigured, getStravaAutoCompletions } from '../lib/strava'
 import TrainingWeeks from './TrainingWeeks'
 import PowerZones from './PowerZones'
@@ -10,6 +11,27 @@ import Adjustments from './Adjustments'
 import Overview from './Overview'
 import CalendarView from './CalendarView'
 import PlanGuide from './PlanGuide'
+import WeeklyPlanner from './WeeklyPlanner'
+
+// Reconstruct the app-wide plan shape from persisted weekly-planner weeks.
+function buildPlanFromWeeks(weeks) {
+  return [...(weeks || [])]
+    .sort((a, b) => a.week_num - b.week_num)
+    .map(w => {
+      const sessions = w.sessions || []
+      const mins = sessions.reduce((s, x) => s + (x.zone === 'rest' ? 0 : parseLeadingMinutes(x.desc)), 0)
+      return {
+        num: w.week_num,
+        phase: 'weekly',
+        phaseLabel: w.inputs?.phase || 'Planned week',
+        label: w.inputs?.recovery ? 'Recovery week' : 'Planned week',
+        hrs: Math.round((mins / 60) * 2) / 2,
+        dateStr: new Date(w.week_start + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }),
+        isRecovery: !!w.inputs?.recovery,
+        sessions,
+      }
+    })
+}
 
 export default function Dashboard({ user, onLogout, onUpdateUser }) {
   const [tab, setTab] = useState('overview')
@@ -19,18 +41,22 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
   const [ftpHistory, setFtpHistory] = useState([])
   const [activities, setActivities] = useState([])
   const [stravaAccount, setStravaAccount] = useState(null)
+  const [plannedWeeks, setPlannedWeeks] = useState([])
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
   const [loading, setLoading] = useState(true)
   const autoSyncedRef = useRef(false)
 
+  const weeklyMode = user?.planning_mode === 'weekly'
+
   const raceDate = user.event_date ? new Date(user.event_date) : null
   const daysLeft = raceDate ? Math.ceil((raceDate - new Date()) / (1000 * 60 * 60 * 24)) : null
 
-  // Generate plan from user profile
+  // Plan source depends on mode: weekly mode reconstructs from persisted
+  // bespoke weeks; fixed mode generates the template plan from the profile.
   useEffect(() => {
-    setPlan(generatePlan(user))
-  }, [user])
+    setPlan(weeklyMode ? buildPlanFromWeeks(plannedWeeks) : generatePlan(user))
+  }, [user, weeklyMode, plannedWeeks])
 
   // Backfill a fixed plan start date for users created before anchoring existed.
   useEffect(() => {
@@ -50,7 +76,8 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
       loadFtpHistory(user.id),
       getStravaAccount(user.id),
       loadActivities(user.id),
-    ]).then(([sessions, adjs, ftps, strava, acts]) => {
+      loadPlannedWeeks(user.id),
+    ]).then(([sessions, adjs, ftps, strava, acts, weeks]) => {
       const stateMap = {}
       sessions.forEach(s => {
         const key = `w${s.week_num}_${s.session_idx}`
@@ -61,6 +88,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
       setFtpHistory(ftps)
       setStravaAccount(strava)
       setActivities(acts)
+      setPlannedWeeks(weeks)
       setLoading(false)
     })
   }, [user?.id])
@@ -141,8 +169,23 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     await updateUser(user.id, { ftp: newFTP })
     const entry = await addFtpEntry(user.id, newFTP)
     if (entry) setFtpHistory(prev => [...prev, entry])
-    onUpdateUser(updated)
-    setPlan(generatePlan(updated))
+    onUpdateUser(updated) // the plan effect rebuilds for the active mode
+  }
+
+  async function handleSaveWeek(weekNumToSave, fields) {
+    const saved = await upsertPlannedWeek(user.id, weekNumToSave, fields)
+    if (saved) setPlannedWeeks(prev => [...prev.filter(w => w.week_num !== weekNumToSave), saved].sort((a, b) => a.week_num - b.week_num))
+  }
+
+  async function handleDeleteWeek(weekNumToDelete) {
+    await deletePlannedWeek(user.id, weekNumToDelete)
+    setPlannedWeeks(prev => prev.filter(w => w.week_num !== weekNumToDelete))
+  }
+
+  async function handleSetMode(mode) {
+    setTab('overview')
+    await updateUser(user.id, { planning_mode: mode })
+    onUpdateUser({ ...user, planning_mode: mode })
   }
 
   function handleConnectStrava() {
@@ -167,17 +210,20 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
   // Adaptive layer — anchor the plan in real time, then adjust upcoming weeks
   // from the confirmed recent-week signals. All derived, no extra storage.
   const planStart = useMemo(() => getPlanStart(user), [user?.plan_start_date])
+  const realCurrentWeek = useMemo(() => getCurrentWeekNum(planStart), [planStart])
   const currentWeek = useMemo(
-    () => Math.min(plan.length || 1, getCurrentWeekNum(planStart)),
-    [planStart, plan.length]
+    () => Math.min(plan.length || 1, realCurrentWeek),
+    [realCurrentWeek, plan.length]
   )
+  // Weekly mode carries its own (load-driven) adjustment in the planner, so the
+  // fixed-plan adaptation engine is disabled there.
   const adaptation = useMemo(
-    () => computeAdaptation(plan, sessionState, currentWeek),
-    [plan, sessionState, currentWeek]
+    () => weeklyMode ? null : computeAdaptation(plan, sessionState, currentWeek),
+    [plan, sessionState, currentWeek, weeklyMode]
   )
   const adjustedPlan = useMemo(
-    () => applyAdaptation(plan, adaptation, currentWeek),
-    [plan, adaptation, currentWeek]
+    () => weeklyMode ? plan : applyAdaptation(plan, adaptation, currentWeek),
+    [plan, adaptation, currentWeek, weeklyMode]
   )
   const unconfirmed = useMemo(
     () => getUnconfirmedSessions(adjustedPlan, sessionState, planStart),
@@ -210,17 +256,33 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     [plan, sessionState, planStart]
   )
 
+  // Load context for the weekly planner's brain: current fitness + the load of
+  // the last 7 days, so it can ramp safely from what you've actually been doing.
+  const loadCtx = useMemo(() => {
+    const tl = computeTrainingLoad(plan, sessionState, activities, user, planStart)
+    const recentWeeklyTss = tl.series.slice(-7).reduce((s, d) => s + d.load, 0)
+    return { currentCtl: tl.current.ctl, recentWeeklyTss: Math.round(recentWeeklyTss) }
+  }, [plan, sessionState, activities, user, planStart])
+
   const totalSessions = adjustedPlan.reduce((a, w) => a + w.sessions.filter(s => s.zone !== 'rest').length, 0)
   const doneSessions = Object.values(sessionState).filter(s => s?.completed).length
 
-  const TABS = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'calendar', label: 'Calendar' },
-    { id: 'training', label: 'Training weeks' },
-    { id: 'guide', label: 'Plan guide' },
-    { id: 'zones', label: 'Power zones' },
-    { id: 'adjustments', label: 'Adjustments' },
-  ]
+  const TABS = weeklyMode
+    ? [
+        { id: 'overview', label: 'Overview' },
+        { id: 'plan-week', label: 'Plan week' },
+        { id: 'calendar', label: 'Calendar' },
+        { id: 'training', label: 'Training weeks' },
+        { id: 'zones', label: 'Power zones' },
+      ]
+    : [
+        { id: 'overview', label: 'Overview' },
+        { id: 'calendar', label: 'Calendar' },
+        { id: 'training', label: 'Training weeks' },
+        { id: 'guide', label: 'Plan guide' },
+        { id: 'zones', label: 'Power zones' },
+        { id: 'adjustments', label: 'Adjustments' },
+      ]
 
   return (
     <div className="app-shell">
@@ -248,6 +310,13 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
         </div>
       </div>
 
+      {/* Planning-mode toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1rem', fontSize: 12, color: 'var(--color-text-muted)' }}>
+        <span style={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Planning</span>
+        <button className={`btn btn-sm ${!weeklyMode ? 'btn-primary' : ''}`} onClick={() => handleSetMode('fixed')}>Fixed plan</button>
+        <button className={`btn btn-sm ${weeklyMode ? 'btn-primary' : ''}`} onClick={() => handleSetMode('weekly')}>Guided weekly</button>
+      </div>
+
       <div className="tabs">
         {TABS.map(t => (
           <button key={t.id} className={`tab-btn ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
@@ -264,6 +333,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
         <>
           {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} activities={activities} streak={streak} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
             strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }} />}
+          {tab === 'plan-week' && weeklyMode && <WeeklyPlanner user={user} planStart={planStart} weekNum={realCurrentWeek} plannedWeeks={plannedWeeks} loadCtx={loadCtx} onSave={handleSaveWeek} onDelete={handleDeleteWeek} />}
           {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={user.event_name} />}
           {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} user={user} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} />}
           {tab === 'guide' && <PlanGuide plan={adjustedPlan} user={user} />}

@@ -128,6 +128,40 @@ export async function upsertSessionState(userId, weekNum, sessionIdx, updates) {
   return !error
 }
 
+// ── Planned weeks (guided weekly planner) ────────────────────
+
+export async function loadPlannedWeeks(userId) {
+  const { data } = await supabase
+    .from('planned_weeks')
+    .select('*')
+    .eq('user_id', userId)
+    .order('week_num', { ascending: true })
+  return data || []
+}
+
+export async function upsertPlannedWeek(userId, weekNum, fields) {
+  const { data, error } = await supabase
+    .from('planned_weeks')
+    .upsert({
+      user_id: userId,
+      week_num: weekNum,
+      updated_at: new Date().toISOString(),
+      ...fields,
+    }, { onConflict: 'user_id,week_num' })
+    .select()
+    .single()
+  return error ? null : data
+}
+
+export async function deletePlannedWeek(userId, weekNum) {
+  const { error } = await supabase
+    .from('planned_weeks')
+    .delete()
+    .eq('user_id', userId)
+    .eq('week_num', weekNum)
+  return !error
+}
+
 // ── Adjustments ──────────────────────────────────────────────
 
 export async function loadAdjustments(userId) {

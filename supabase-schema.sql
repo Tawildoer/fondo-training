@@ -23,6 +23,9 @@ create table users (
   days_per_week int,
   -- Plan anchoring (fixed start so the plan progresses through real time)
   plan_start_date date,
+  -- Weekly guided planner
+  planning_mode text default 'fixed',   -- 'fixed' | 'weekly'
+  fitness_goal text default 'build',    -- 'maintain' | 'build'
   -- Meta
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
@@ -30,6 +33,8 @@ create table users (
 );
 -- Migration for existing databases (safe to re-run):
 --   alter table users add column if not exists plan_start_date date;
+--   alter table users add column if not exists planning_mode text default 'fixed';
+--   alter table users add column if not exists fitness_goal text default 'build';
 
 -- 2. Session state (checkbox + RPE + notes per session per user)
 create table session_state (
@@ -107,6 +112,28 @@ create table adjustments (
   created_at timestamptz default now()
 );
 
+-- 7. Planned weeks (week-to-week guided planner — bespoke committed weeks).
+--    `sessions` mirrors the in-app plan shape so all downstream features
+--    (calendar, today, streak, training load, Strava auto-complete) work as-is.
+create table planned_weeks (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid not null references users(id) on delete cascade,
+  week_num int not null,          -- absolute weeks from plan_start (1-based)
+  week_start date not null,       -- Monday of the planned week
+  target_tss numeric(6,1),        -- the week's load goal
+  sessions jsonb not null default '[]'::jsonb,
+  inputs jsonb,                   -- {days, freshness, focus, busy, goal, recovery}
+  locked_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (user_id, week_num)
+);
+-- Migration for existing databases (safe to re-run):
+--   create table if not exists planned_weeks ( ... as above ... );
+--   alter table planned_weeks enable row level security;
+--   create policy "planned_weeks_all" on planned_weeks for all using (
+--     user_id in (select id from users where auth_id = auth.uid()));
+
 -- ============================================================
 -- Row Level Security
 -- ============================================================
@@ -117,6 +144,7 @@ alter table adjustments enable row level security;
 alter table ftp_history enable row level security;
 alter table strava_accounts enable row level security;
 alter table activities enable row level security;
+alter table planned_weeks enable row level security;
 
 create policy "users_select_own"  on users for select using (auth.uid() = auth_id);
 create policy "users_insert_own"  on users for insert with check (auth.uid() = auth_id);
@@ -139,6 +167,10 @@ create policy "strava_accounts_all" on strava_accounts for all using (
 );
 
 create policy "activities_all" on activities for all using (
+  user_id in (select id from users where auth_id = auth.uid())
+);
+
+create policy "planned_weeks_all" on planned_weeks for all using (
   user_id in (select id from users where auth_id = auth.uid())
 );
 
