@@ -372,7 +372,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
         </div>
       ) : (
         <>
-          {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} activities={activities} streak={streak} loadCtx={loadCtx} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
+          {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} activities={activities} streak={streak} loadCtx={loadCtx} events={effectiveEvents} plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
             needsPlan={weeklyMode && !currentWeekPlanned} onPlanWeek={() => setTab('plan-week')}
             strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }} />}
           {tab === 'plan-week' && weeklyMode && <WeeklyPlanner user={user} planStart={planStart} weekNum={realCurrentWeek} plannedWeeks={plannedWeeks} events={effectiveEvents} loadCtx={loadCtx} onSave={handleSaveWeek} onDelete={handleDeleteWeek} onGenerated={() => setTab('training')} />}

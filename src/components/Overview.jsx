@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
-import { getTodaySessions, getScheduledSessions } from '../lib/schedule'
+import { getTodaySessions, getScheduledSessions, parseLocalDate } from '../lib/schedule'
 import { RPE_LABELS } from '../lib/planGenerator'
 import { computeTrainingLoad, parseLeadingMinutes } from '../lib/trainingLoad'
+import { projectLoad } from '../lib/weeklyPlanner'
 
 // Monday 00:00 → Sunday 23:59 of the week containing `now`.
 function thisWeekRange(now = new Date()) {
@@ -236,6 +237,66 @@ function TodayCard({ plan, sessionState, planStart, onToggle, onBail }) {
           )
         })}
       </div>
+    </div>
+  )
+}
+
+function ProjectionChart({ series, events }) {
+  if (!series || series.length < 2) return null
+  const W = 320, H = 150, padL = 6, padR = 6, padT = 18, padB = 22
+  const n = series.length
+  const maxY = Math.max(1, ...series.map(s => s.ctl))
+  const xAt = i => (n === 1 ? W / 2 : padL + (i / (n - 1)) * (W - padL - padR))
+  const yAt = v => padT + (1 - v / maxY) * (H - padT - padB)
+  const seg = (from, to) => series.slice(from, to + 1).map((s, k) => `${k === 0 ? 'M' : 'L'} ${xAt(from + k).toFixed(1)} ${yAt(s.ctl).toFixed(1)}`).join(' ')
+  const lastPlanned = series.reduce((acc, s, i) => (s.planned ? i : acc), -1)
+  const solidPath = lastPlanned >= 1 ? seg(0, lastPlanned) : ''
+  const dashedPath = seg(Math.max(0, lastPlanned), n - 1)
+  const areaPath = `${seg(0, n - 1)} L ${xAt(n - 1).toFixed(1)} ${(H - padB).toFixed(1)} L ${xAt(0).toFixed(1)} ${(H - padB).toFixed(1)} Z`
+  const start = series[0].ctl
+  const peak = Math.max(...series.map(s => s.ctl))
+  const fmt = d => d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+  const markers = (events || []).map(e => {
+    const d = parseLocalDate(e.date)
+    if (!d) return null
+    const idx = series.findIndex(s => d >= s.weekStart && d < new Date(s.weekStart.getTime() + 7 * 86400000))
+    return idx < 0 ? null : { x: xAt(idx), name: e.name || 'Event' }
+  }).filter(Boolean)
+
+  return (
+    <div className="card">
+      <h2>Fitness trajectory</h2>
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 10, fontSize: 12, color: 'var(--color-text-muted)' }}>
+        <span>Now <strong style={{ color: 'var(--color-text)' }}>{start} CTL</strong></span>
+        <span>Projected peak <strong style={{ color: 'var(--color-accent-text)' }}>{peak} CTL</strong></span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="projFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.32" />
+            <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill="url(#projFill)" stroke="none" />
+        {markers.map((m, i) => (
+          <g key={i}>
+            <line x1={m.x} x2={m.x} y1={padT} y2={H - padB} stroke="var(--color-electric)" strokeWidth="1" strokeDasharray="2 2" opacity="0.8" />
+            <text x={m.x} y={12} textAnchor="middle" fontSize="10"><title>{m.name}</title>🏁</text>
+          </g>
+        ))}
+        {solidPath && <path d={solidPath} fill="none" stroke="var(--color-accent)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />}
+        <path d={dashedPath} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" strokeDasharray={lastPlanned >= 0 ? '4 3' : '0'} opacity={lastPlanned >= 0 ? 0.85 : 1} />
+        <text x={padL} y={H - 4} textAnchor="start" fontSize="8" fill="var(--color-text-faint)">{fmt(series[0].weekStart)}</text>
+        <text x={W - padR} y={H - 4} textAnchor="end" fontSize="8" fill="var(--color-text-faint)">{fmt(series[n - 1].weekStart)}</text>
+      </svg>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, fontSize: 11, color: 'var(--color-text-muted)' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, height: 2, background: 'var(--color-accent)', display: 'inline-block' }} /> Planned</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 14, borderTop: '2px dashed var(--color-accent)', display: 'inline-block' }} /> Projected</span>
+        {markers.length > 0 && <span>🏁 event</span>}
+      </div>
+      <p style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 8, lineHeight: 1.5 }}>
+        Where your fitness heads if you keep planning toward your {events?.length ? 'events' : 'goal'} — locked weeks solid, future weeks estimated.
+      </p>
     </div>
   )
 }
@@ -480,7 +541,7 @@ function TrainingLoadCard({ plan, sessionState, activities, user, planStart }) {
   )
 }
 
-export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], streak, loadCtx, needsPlan, onPlanWeek, onToggle, onBail, onRPE, doneSessions, totalSessions, daysLeft, strava }) {
+export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], streak, loadCtx, events = [], plannedWeeks = [], realCurrentWeek = 1, needsPlan, onPlanWeek, onToggle, onBail, onRPE, doneSessions, totalSessions, daysLeft, strava }) {
   // This-week execution — far more relevant than whole-plan totals now.
   const [wkStart, wkEnd] = thisWeekRange()
   const weekSessions = getScheduledSessions(plan, { base: planStart })
@@ -491,6 +552,12 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
   const plannedHrs = Math.round(weekSessions.reduce((a, s) => a + parseLeadingMinutes(s.session.desc), 0) / 60 * 10) / 10
   const doneHrs = Math.round(weekSessions.filter(isDone).reduce((a, s) => a + parseLeadingMinutes(s.session.desc), 0) / 60 * 10) / 10
   const weekPct = plannedThisWeek ? Math.round((doneThisWeek / plannedThisWeek) * 100) : 0
+
+  const projection = useMemo(() => projectLoad({
+    currentCtl: loadCtx?.currentCtl || 0,
+    recentWeeklyTss: loadCtx?.recentWeeklyTss || 0,
+    planStart, currentWeekNum: realCurrentWeek, events, user, plannedWeeks,
+  }), [loadCtx, planStart, realCurrentWeek, events, user, plannedWeeks])
 
   return (
     <div>
@@ -517,6 +584,8 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
           <div className="progress-fill" style={{ width: `${weekPct}%` }} />
         </div>
       </div>
+
+      <ProjectionChart series={projection} events={events} />
 
       {/* Phase legend */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: '1rem' }}>

@@ -9,6 +9,7 @@
 // (calendar, streak, training load, Strava auto-complete) just works.
 
 import { getZoneLabel } from './planGenerator'
+import { nextEvent, parseLocalDate } from './schedule'
 
 const ZONE_IF = { z1: 0.45, z2: 0.65, z3: 0.83, z4: 0.98, z5: 1.13 }
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -212,6 +213,63 @@ export function draftWeek(target, inputs, ftp) {
   })
 
   return DAY_NAMES.map(day => byDay[day] || restDay(day))
+}
+
+// ── Forward projection ───────────────────────────────────────
+// Roll fitness (CTL) forward week by week using the same load brain, so the
+// home page can show the expected trajectory. Uses locked weeks where they
+// exist (planned=true) and the periodized target elsewhere; with multiple
+// events it builds → tapers → rebuilds across the whole race season.
+function mondayOfDate(date) {
+  const d = new Date(date)
+  d.setDate(d.getDate() + (d.getDay() === 0 ? -6 : 1 - d.getDay()))
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+function mondayOfPlanWeek(planStart, weekNum) {
+  const d = new Date(planStart)
+  d.setDate(d.getDate() + (weekNum - 1) * 7)
+  return mondayOfDate(d)
+}
+
+export function projectLoad({ currentCtl = 0, recentWeeklyTss = 0, planStart, currentWeekNum = 1, events = [], user = {}, plannedWeeks = [] }) {
+  const goal = user.fitness_goal || 'build'
+  const weeklyHoursStart = user.weekly_hours_start || 0
+  const daysPerWeek = user.days_per_week || 5
+
+  const evDates = (events || []).map(e => parseLocalDate(e.date)).filter(Boolean).sort((a, b) => a - b)
+  let horizon = 12
+  if (evDates.length) {
+    const wk = Math.round((mondayOfDate(evDates[evDates.length - 1]) - mondayOfPlanWeek(planStart, currentWeekNum)) / (7 * 86400000))
+    horizon = clamp(wk + 2, 4, 52)
+  }
+
+  const plannedByNum = {}
+  ;(plannedWeeks || []).forEach(w => { plannedByNum[w.week_num] = w })
+
+  const series = []
+  let ctl = currentCtl
+  let prevTss = recentWeeklyTss
+  for (let i = 0; i < horizon; i++) {
+    const weekNum = currentWeekNum + i
+    const weekStart = mondayOfPlanWeek(planStart, weekNum)
+    const ev = nextEvent(events, weekStart)
+    const weeksToEvent = ev?._date ? Math.max(0, Math.round((mondayOfDate(ev._date) - weekStart) / (7 * 86400000))) : null
+    let tss, planned = false
+    if (plannedByNum[weekNum]) {
+      tss = weekTss(plannedByNum[weekNum].sessions); planned = true
+    } else {
+      tss = computeWeekTarget(
+        { goal, freshness: 3, focus: 'none', busy: false },
+        { currentTsb: null, recentWeeklyTss: prevTss, weeklyHoursStart, daysPerWeek, weeksToEvent, weekNum }
+      ).targetTss
+    }
+    const daily = tss / 7
+    for (let d = 0; d < 7; d++) ctl += (daily - ctl) / 42
+    series.push({ weekNum, weekStart, tss, ctl: Math.round(ctl), planned })
+    prevTss = tss
+  }
+  return series
 }
 
 // Total prescribed TSS of a drafted/edited session list (for the "why" panel).
