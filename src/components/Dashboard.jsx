@@ -280,9 +280,12 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     return { currentCtl: tl.current.ctl, currentTsb: tl.current.tsb, recentWeeklyTss: Math.round(recentWeeklyTss) }
   }, [plan, sessionState, activities, user, planStart])
 
+  // The week you'd actually plan now (weekend → the upcoming week), kept in
+  // sync with WeeklyPlanner's default so the CTA doesn't nag about a dead week.
+  const planningWeekNum = realCurrentWeek + ([0, 6].includes(new Date().getDay()) ? 1 : 0)
   const currentWeekPlanned = useMemo(
-    () => plannedWeeks.some(w => w.week_num === realCurrentWeek),
-    [plannedWeeks, realCurrentWeek]
+    () => plannedWeeks.some(w => w.week_num === planningWeekNum),
+    [plannedWeeks, planningWeekNum]
   )
 
   const totalSessions = adjustedPlan.reduce((a, w) => a + w.sessions.filter(s => s.zone !== 'rest').length, 0)

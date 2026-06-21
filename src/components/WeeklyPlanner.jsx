@@ -75,7 +75,9 @@ function defaultInputs(plannedWeeks, user) {
 }
 
 export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, loadCtx, onSave, onDelete, onGenerated }) {
-  const [offset, setOffset] = useState(0) // 0 = this week, 1 = next week
+  // On the weekend the current (Mon-anchored) week is basically done, so
+  // default to planning next week — the one you're about to ride.
+  const [offset, setOffset] = useState(() => ([0, 6].includes(new Date().getDay()) ? 1 : 0))
   const activeWeekNum = weekNum + offset
   const weekStart = useMemo(() => mondayOfWeek(planStart, activeWeekNum), [planStart, activeWeekNum])
   const existing = plannedWeeks.find(w => w.week_num === activeWeekNum)
