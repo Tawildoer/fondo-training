@@ -48,30 +48,60 @@ function fmtTime(v) {
 
 const ZONE_LABEL = { z1: 'Recovery', z2: 'Endurance', z3: 'Sweet spot', z4: 'Threshold', z5: 'VO₂', rest: 'Rest' }
 
+// How many quality (hard) days a week should carry, by event proximity / goal.
+function recommendedHardDays(weeksToEvent, goal) {
+  if (weeksToEvent != null) {
+    if (weeksToEvent <= 2) return 1   // taper: keep a little sharpness
+    if (weeksToEvent <= 8) return 3   // peak build
+    return 2                          // base build
+  }
+  return goal === 'build' ? 2 : 1
+}
+
+// Make sure a week carries at least `minHard` quality days, promoting easy
+// (non-long-ride) days as needed. Keeps the longest easy day as the long ride.
+function ensureHardDays(inputs, minHard) {
+  const days = { ...inputs.days }
+  const onDays = DAY_NAMES.filter(d => days[d])
+  const hardCount = onDays.filter(d => days[d].type === 'hard').length
+  if (hardCount >= minHard) return inputs
+  const longEasy = onDays
+    .filter(d => days[d].type === 'easy')
+    .sort((a, b) => TIER_MIN[days[b].length] - TIER_MIN[days[a].length])[0]
+  let need = minHard - hardCount
+  for (const d of onDays) {
+    if (need <= 0) break
+    if (days[d].type === 'easy' && d !== longEasy) { days[d] = { ...days[d], type: 'hard' }; need-- }
+  }
+  return { ...inputs, days }
+}
+
 // Sensible starting point so most weeks are one tap: reuse the last planned
-// week's pattern (new {length,type} shape), otherwise a light template.
-function defaultInputs(plannedWeeks, user) {
+// week's pattern (new {length,type} shape), otherwise a light template — then
+// ensure it has the event/goal-appropriate amount of intensity.
+function defaultInputs(plannedWeeks, user, minHard = 2) {
   const latest = [...(plannedWeeks || [])].sort((a, b) => a.week_num - b.week_num).pop()
   const latestDays = latest?.inputs?.days
   const isNewShape = latestDays && Object.values(latestDays).some(v => v && typeof v === 'object')
+  let base
   if (isNewShape) {
-    return {
+    base = {
       days: { ...latestDays },
       goal: latest.inputs.goal || user.fitness_goal || 'build',
       focus: latest.inputs.focus || 'none',
       freshness: 3, busy: false, // momentary signals reset each week
     }
+  } else {
+    // Template: a long easy weekend ride + quality midweek days.
+    const order = ['Sat', 'Tue', 'Thu', 'Sun', 'Wed', 'Mon', 'Fri']
+    const n = Math.max(3, Math.min(7, user.days_per_week || 4))
+    const days = {}
+    order.slice(0, n).forEach(d => {
+      days[d] = d === 'Sat' ? { length: 'L', type: 'easy' } : { length: 'M', type: 'easy' }
+    })
+    base = { days, goal: user.fitness_goal || 'build', focus: 'none', freshness: 3, busy: false }
   }
-  // Template: a long easy weekend ride + a couple of quality midweek days.
-  const order = ['Sat', 'Tue', 'Thu', 'Sun', 'Wed', 'Mon', 'Fri']
-  const n = Math.max(3, Math.min(7, user.days_per_week || 4))
-  const days = {}
-  order.slice(0, n).forEach(d => {
-    days[d] = d === 'Sat' ? { length: 'L', type: 'easy' }
-      : (d === 'Tue' || d === 'Thu') ? { length: 'M', type: 'hard' }
-      : { length: 'M', type: 'easy' }
-  })
-  return { days, goal: user.fitness_goal || 'build', focus: 'none', freshness: 3, busy: false }
+  return ensureHardDays(base, minHard)
 }
 
 export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, loadCtx, onSave, onDelete, onGenerated }) {
@@ -82,7 +112,14 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   const weekStart = useMemo(() => mondayOfWeek(planStart, activeWeekNum), [planStart, activeWeekNum])
   const existing = plannedWeeks.find(w => w.week_num === activeWeekNum)
 
-  const [inputs, setInputs] = useState(() => defaultInputs(plannedWeeks, user))
+  const [inputs, setInputs] = useState(() => {
+    const off = [0, 6].includes(new Date().getDay()) ? 1 : 0
+    const ws = mondayOfWeek(planStart, weekNum + off)
+    const wte = user.event_date
+      ? Math.max(0, Math.round((mondayOf(new Date(user.event_date)) - ws) / (7 * 86400000)))
+      : null
+    return defaultInputs(plannedWeeks, user, recommendedHardDays(wte, user.fitness_goal))
+  })
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
