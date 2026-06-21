@@ -107,7 +107,7 @@ function hardDaysFor(focus, weeksToEvent, inputs) {
 
 function countAvailable(inputs) {
   const days = inputs?.days || {}
-  return DAY_NAMES.filter(d => (days[d] || 0) > 0).length
+  return DAY_NAMES.filter(d => days[d]).length
 }
 
 function buildNote({ phase, goal, weeksToEvent, isRecovery, busy, deeplyFatigued }) {
@@ -173,68 +173,42 @@ function describe(zone, min, ftp, isLong) {
   }
 }
 
-// Pick which available days carry the hard sessions: prefer longer days, keep
-// them spaced apart (no back-to-back), and avoid the long-ride day.
-function pickHardDays(available, longDay, hardDays) {
-  const candidates = available
-    .filter(d => d.day !== longDay && d.minutes >= 40)
-    .sort((a, b) => b.minutes - a.minutes)
-  const chosen = []
-  for (const c of candidates) {
-    if (chosen.length >= hardDays) break
-    const idx = DAY_NAMES.indexOf(c.day)
-    const adjacent = chosen.some(ch => Math.abs(DAY_NAMES.indexOf(ch) - idx) === 1)
-    if (!adjacent) chosen.push(c.day)
-  }
-  // If spacing was too strict to fill the quota, relax it.
-  for (const c of candidates) {
-    if (chosen.length >= hardDays) break
-    if (!chosen.includes(c.day)) chosen.push(c.day)
-  }
-  return chosen
+// Per-day length tiers → minutes. Coarse up front; fine-tune in the draft.
+export const TIER_MIN = { S: 45, M: 90, L: 150 }
+export const TIER_LABEL = { S: 'Short', M: 'Med', L: 'Long' }
+
+// Quality-day zone: a long quality day is tempo/sweet-spot (z3); shorter
+// quality days are threshold (z4), with sweet-spot variety when several stack.
+function hardZone(i, focus, length) {
+  if (length === 'L') return 'z3'
+  if (focus === 'climbing' || focus === 'threshold') return 'z4'
+  return i % 2 === 0 ? 'z4' : 'z3'
 }
 
+// Lay the week out directly from your per-day choices: each on-day carries a
+// length (S/M/L) and a type (easy/hard). Off-days are rest. A recovery week
+// forces everything easy.
 export function draftWeek(target, inputs, ftp) {
   const days = inputs?.days || {}
   const focus = inputs?.focus || 'none'
-  const available = DAY_NAMES
-    .map(day => ({ day, minutes: days[day] || 0 }))
-    .filter(d => d.minutes > 0)
+  const onDays = DAY_NAMES.filter(d => days[d])
+  if (!onDays.length) return DAY_NAMES.map(restDay)
 
-  if (!available.length) return DAY_NAMES.map(restDay)
+  // Long ride = the longest easy day.
+  const longEasy = onDays
+    .filter(d => (days[d].type || 'easy') === 'easy')
+    .sort((a, b) => TIER_MIN[days[b].length] - TIER_MIN[days[a].length])[0]
 
-  const longDay = available.reduce((a, b) => (b.minutes > a.minutes ? b : a)).day
-  const hardSet = new Set(target.isRecovery ? [] : pickHardDays(available, longDay, target.hardDays))
-
-  // Assign a zone to each available day.
-  const hardZoneFor = (i) => {
-    if (focus === 'climbing') return 'z4'
-    if (focus === 'threshold') return i === 0 ? 'z4' : 'z3'
-    if (focus === 'endurance') return 'z3'
-    return i === 0 ? 'z4' : 'z3' // balanced: one threshold, one sweet-spot
-  }
   let hardSeen = 0
-  const zoneByDay = {}
-  available.forEach(({ day, minutes }) => {
-    if (target.isRecovery) zoneByDay[day] = minutes <= 45 ? 'z1' : 'z2'
-    else if (day === longDay) zoneByDay[day] = focus === 'endurance' ? 'z3' : 'z2'
-    else if (hardSet.has(day)) zoneByDay[day] = hardZoneFor(hardSeen++)
-    else zoneByDay[day] = minutes <= 40 ? 'z1' : 'z2'
-  })
-
-  // Scale durations toward the target: each day's ceiling is min(budget, zone
-  // max); ratio scales them uniformly so volume tracks the target but never
-  // exceeds the time you actually have (flexibility wins).
-  const ceil = ({ day, minutes }) => Math.min(minutes, ZONE_META[zoneByDay[day]].max)
-  const maxTss = available.reduce((s, d) => s + tssFor(zoneByDay[d.day], ceil(d)), 0) || 1
-  const ratio = clamp(target.targetTss / maxTss, 0.4, 1)
-
   const byDay = {}
-  available.forEach(d => {
-    const zone = zoneByDay[d.day]
-    const meta = ZONE_META[zone]
-    const minutes = clamp(Math.round(ceil(d) * ratio / 5) * 5, Math.min(meta.min, d.minutes), ceil(d))
-    byDay[d.day] = buildSession(d.day, zone, minutes, ftp, d.day === longDay)
+  onDays.forEach(day => {
+    const { length = 'M', type = 'easy' } = days[day]
+    const minutes = TIER_MIN[length] || 90
+    let zone
+    if (target.isRecovery) zone = minutes <= 45 ? 'z1' : 'z2'
+    else if (type === 'hard') zone = hardZone(hardSeen++, focus, length)
+    else zone = minutes <= 45 ? 'z1' : 'z2'
+    byDay[day] = buildSession(day, zone, minutes, ftp, day === longEasy && zone === 'z2')
   })
 
   return DAY_NAMES.map(day => byDay[day] || restDay(day))

@@ -2,8 +2,21 @@ import { useState, useMemo } from 'react'
 import { localDateStr } from '../lib/schedule'
 import {
   computeWeekTarget, draftWeek, weekTss, buildSession, projectCtl,
-  ZONE_OPTIONS, DAY_NAMES,
+  ZONE_OPTIONS, DAY_NAMES, TIER_MIN, TIER_LABEL,
 } from '../lib/weeklyPlanner'
+
+const LENGTHS = ['S', 'M', 'L']
+
+// Normalize a saved day map to the {length,type} shape (older weeks stored
+// raw minutes per day).
+function normalizeDays(days = {}) {
+  const out = {}
+  Object.entries(days).forEach(([day, v]) => {
+    if (v && typeof v === 'object') out[day] = { length: v.length || 'M', type: v.type || 'easy' }
+    else if (typeof v === 'number' && v > 0) out[day] = { length: v <= 50 ? 'S' : v <= 110 ? 'M' : 'L', type: 'easy' }
+  })
+  return out
+}
 
 const FOCUS_OPTIONS = [
   { v: 'none', label: 'Balanced' },
@@ -36,21 +49,28 @@ function fmtTime(v) {
 const ZONE_LABEL = { z1: 'Recovery', z2: 'Endurance', z3: 'Sweet spot', z4: 'Threshold', z5: 'VO₂', rest: 'Rest' }
 
 // Sensible starting point so most weeks are one tap: reuse the last planned
-// week's pattern, otherwise a light template from the user's usual days.
+// week's pattern (new {length,type} shape), otherwise a light template.
 function defaultInputs(plannedWeeks, user) {
   const latest = [...(plannedWeeks || [])].sort((a, b) => a.week_num - b.week_num).pop()
-  if (latest?.inputs?.days && Object.values(latest.inputs.days).some(v => v > 0)) {
+  const latestDays = latest?.inputs?.days
+  const isNewShape = latestDays && Object.values(latestDays).some(v => v && typeof v === 'object')
+  if (isNewShape) {
     return {
-      days: { ...latest.inputs.days },
+      days: { ...latestDays },
       goal: latest.inputs.goal || user.fitness_goal || 'build',
       focus: latest.inputs.focus || 'none',
       freshness: 3, busy: false, // momentary signals reset each week
     }
   }
+  // Template: a long easy weekend ride + a couple of quality midweek days.
   const order = ['Sat', 'Tue', 'Thu', 'Sun', 'Wed', 'Mon', 'Fri']
   const n = Math.max(3, Math.min(7, user.days_per_week || 4))
   const days = {}
-  order.slice(0, n).forEach(d => { days[d] = d === 'Sat' ? 120 : 60 })
+  order.slice(0, n).forEach(d => {
+    days[d] = d === 'Sat' ? { length: 'L', type: 'easy' }
+      : (d === 'Tue' || d === 'Thu') ? { length: 'M', type: 'hard' }
+      : { length: 'M', type: 'easy' }
+  })
   return { days, goal: user.fitness_goal || 'build', focus: 'none', freshness: 3, busy: false }
 }
 
@@ -71,8 +91,8 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   const weeksToEvent = eventDate
     ? Math.max(0, Math.round((mondayOf(eventDate) - weekStart) / (7 * 86400000)))
     : null
-  const availableMinutes = DAY_NAMES.reduce((s, d) => s + (inputs.days[d] || 0), 0)
-  const availDays = DAY_NAMES.filter(d => (inputs.days[d] || 0) > 0).length
+  const availableMinutes = DAY_NAMES.reduce((s, d) => s + (inputs.days[d] ? TIER_MIN[inputs.days[d].length] : 0), 0)
+  const availDays = DAY_NAMES.filter(d => inputs.days[d]).length
   const totalHours = Math.round((availableMinutes / 60) * 10) / 10
 
   const ctx = useMemo(() => ({
@@ -90,8 +110,16 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
 
   const weekLabel = weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
-  function setDay(day, minutes) {
-    setInputs(prev => ({ ...prev, days: { ...prev.days, [day]: minutes } }))
+  function toggleDay(day) {
+    setInputs(prev => {
+      const days = { ...prev.days }
+      if (days[day]) delete days[day]
+      else days[day] = { length: day === 'Sat' || day === 'Sun' ? 'L' : 'M', type: 'easy' }
+      return { ...prev, days }
+    })
+  }
+  function setDayField(day, field, val) {
+    setInputs(prev => ({ ...prev, days: { ...prev.days, [day]: { ...prev.days[day], [field]: val } } }))
   }
 
   function generate() {
@@ -125,7 +153,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
 
   function startReplan() {
     if (existing?.inputs) setInputs({
-      days: existing.inputs.days || {},
+      days: normalizeDays(existing.inputs.days),
       goal: existing.inputs.goal || 'build',
       freshness: existing.inputs.freshness ?? 3,
       focus: existing.inputs.focus || 'none',
@@ -167,7 +195,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
         <>
           {/* Constraints */}
           <div className="card">
-            <h2>How much can you ride?</h2>
+            <h2>Which days can you ride?</h2>
 
             {/* Strong volume suggestion (event-aware) */}
             <div style={{
@@ -190,22 +218,42 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
             </div>
 
             <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 16 }}>
-              Slide each day to the time you've got. We've started you off — just adjust what's changed.
+              Tap the days you can ride, then set how long and whether it's an easy or hard day.
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
               {DAY_NAMES.map(day => {
-                const v = inputs.days[day] || 0
+                const d = inputs.days[day]
+                const on = !!d
                 return (
-                  <div key={day} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ width: 34, fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: v ? 'var(--color-text)' : 'var(--color-text-faint)' }}>{day}</span>
-                    <input
-                      type="range" min="0" max="240" step="15" value={v}
-                      onChange={e => setDay(day, +e.target.value)}
-                      aria-label={`${day} ride time`}
-                      style={{ flex: 1, accentColor: 'var(--color-accent)', height: 4 }}
-                    />
-                    <span style={{ width: 56, textAlign: 'right', fontSize: 12, fontWeight: 600, color: v ? 'var(--color-accent-text)' : 'var(--color-text-faint)' }}>{fmtTime(v)}</span>
+                  <div key={day} style={{
+                    display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                    padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                    background: on ? 'var(--color-surface2)' : 'transparent',
+                    border: `0.5px solid ${on ? 'var(--color-border)' : 'transparent'}`,
+                  }}>
+                    <button
+                      onClick={() => toggleDay(day)}
+                      style={{
+                        width: 46, padding: '5px 0', borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontFamily: 'inherit',
+                        fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em',
+                        border: `1.5px solid ${on ? 'var(--color-accent)' : 'var(--color-border-strong)'}`,
+                        background: on ? 'var(--color-accent)' : 'transparent',
+                        color: on ? '#fff' : 'var(--color-text-faint)',
+                      }}>
+                      {day}
+                    </button>
+                    {on ? (
+                      <>
+                        <MiniSeg value={d.length} onChange={v => setDayField(day, 'length', v)}
+                          options={LENGTHS.map(l => ({ v: l, label: TIER_LABEL[l] }))} />
+                        <MiniSeg value={d.type} onChange={v => setDayField(day, 'type', v)}
+                          options={[{ v: 'easy', label: 'Easy' }, { v: 'hard', label: 'Hard' }]} />
+                        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-faint)' }}>{fmtTime(TIER_MIN[d.length])}</span>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 12, color: 'var(--color-text-faint)' }}>Rest</span>
+                    )}
                   </div>
                 )
               })}
@@ -338,6 +386,27 @@ function SessionList({ sessions, ftp, editable, onEdit }) {
           )}
         </div>
       ))}
+    </div>
+  )
+}
+
+function MiniSeg({ value, onChange, options }) {
+  return (
+    <div style={{ display: 'inline-flex', borderRadius: 'var(--radius-sm)', overflow: 'hidden', border: '0.5px solid var(--color-border-strong)' }}>
+      {options.map((o, i) => {
+        const active = value === o.v
+        return (
+          <button key={o.v} onClick={() => onChange(o.v)}
+            style={{
+              padding: '5px 9px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              border: 'none', borderLeft: i ? '0.5px solid var(--color-border-strong)' : 'none',
+              background: active ? 'var(--color-accent)' : 'var(--color-surface)',
+              color: active ? '#fff' : 'var(--color-text-muted)',
+            }}>
+            {o.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
