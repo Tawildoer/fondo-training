@@ -264,37 +264,23 @@ function ProjectionChart({ series, events }) {
   )
 }
 
+// First-time Strava connect prompt. Once connected, ride sync lives in Training
+// weeks (it happens automatically; that's just a manual failsafe).
 function StravaCard({ strava }) {
-  if (!strava?.configured) return null
-  const { account, syncing, syncMsg, onConnect, onSync } = strava
-  const connected = !!account
-  const lastSynced = account?.last_synced_at
-    ? new Date(account.last_synced_at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
-    : null
+  if (!strava?.configured || strava.account) return null
+  const { onConnect } = strava
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 1.25rem', fontSize: 12, color: 'var(--color-text-muted)' }}>
       <i className="ti ti-brand-strava" style={{ fontSize: 15, color: '#FC4C02', flexShrink: 0 }} aria-hidden="true" />
-      {connected ? (
-        <>
-          <button className="btn btn-sm" onClick={onSync} disabled={syncing}>
-            <i className="ti ti-refresh" aria-hidden="true" /> {syncing ? 'Syncing…' : 'Sync rides'}
-          </button>
-          <span>{lastSynced ? `Last synced ${lastSynced}` : 'Connected'}</span>
-          {syncMsg && <span style={{ opacity: 0.85 }}>· {syncMsg}</span>}
-        </>
-      ) : (
-        <>
-          <button
-            className="btn btn-sm"
-            onClick={onConnect}
-            style={{ background: '#FC4C02', borderColor: '#FC4C02', color: '#fff' }}
-          >
-            <i className="ti ti-brand-strava" aria-hidden="true" /> Connect Strava
-          </button>
-          <span>to attach ride data to each session.</span>
-        </>
-      )}
+      <button
+        className="btn btn-sm"
+        onClick={onConnect}
+        style={{ background: '#FC4C02', borderColor: '#FC4C02', color: '#fff' }}
+      >
+        <i className="ti ti-brand-strava" aria-hidden="true" /> Connect Strava
+      </button>
+      <span>to attach ride data to each session.</span>
     </div>
   )
 }

@@ -153,9 +153,12 @@ function ProgressRing({ done, total }) {
   )
 }
 
-export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, realCurrentWeek = 1, user, onToggle, onBail, onRPE, onNote, onEditSession }) {
+export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, realCurrentWeek = 1, user, strava, onToggle, onBail, onRPE, onNote, onEditSession }) {
   // Newest/upcoming week first so the most relevant data is at the top.
   const orderedWeeks = [...plan].sort((a, b) => b.num - a.num)
+  const lastSynced = strava?.account?.last_synced_at
+    ? new Date(strava.account.last_synced_at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    : null
   const [openWeeks, setOpenWeeks] = useState(() => new Set([orderedWeeks[0]?.num]))
   const [editKey, setEditKey] = useState(null)
 
@@ -170,6 +173,17 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
 
   return (
     <div>
+      {/* Rides sync automatically; this is a manual failsafe. */}
+      {strava?.configured && strava.account && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', marginBottom: 12, fontSize: 12, color: 'var(--color-text-muted)' }}>
+          <i className="ti ti-brand-strava" style={{ fontSize: 14, color: '#FC4C02', flexShrink: 0 }} aria-hidden="true" />
+          <span>{lastSynced ? `Synced ${lastSynced}` : 'Connected'}</span>
+          {strava.syncMsg && <span style={{ opacity: 0.85 }}>· {strava.syncMsg}</span>}
+          <button className="btn btn-sm" onClick={strava.onSync} disabled={strava.syncing} title="Re-sync Strava rides">
+            <i className="ti ti-refresh" aria-hidden="true" /> {strava.syncing ? 'Syncing…' : 'Sync rides'}
+          </button>
+        </div>
+      )}
       {orderedWeeks.map(week => {
         const activeSessions = week.sessions
           .map((s, i) => ({ s, i }))
