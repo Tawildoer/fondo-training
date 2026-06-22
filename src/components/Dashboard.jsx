@@ -334,6 +334,25 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     { id: 'analytics', label: 'Analytics' },
   ]
 
+  // Sliding tab indicator — measures the active button and animates a single
+  // pill to it, rather than snapping a background between buttons.
+  const tabsRef = useRef(null)
+  const [tabInd, setTabInd] = useState({ left: 0, top: 0, width: 0, height: 0 })
+  const [tabAnimate, setTabAnimate] = useState(false)
+  useEffect(() => {
+    const measure = () => {
+      const el = tabsRef.current?.querySelector(`[data-tab="${tab}"]`)
+      if (!el) return
+      setTabInd({ left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight })
+    }
+    measure()
+    // Enable the transition only after the first measurement so it doesn't
+    // animate in from the corner on mount.
+    const raf = requestAnimationFrame(() => setTabAnimate(true))
+    window.addEventListener('resize', measure)
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure) }
+  }, [tab, loading])
+
   return (
     <div className="app-shell">
       {/* Hero header */}
@@ -360,9 +379,14 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
         </div>
       </div>
 
-      <div className="tabs">
+      <div className="tabs" ref={tabsRef}>
+        <span
+          className={`tab-indicator ${tabAnimate ? 'tab-indicator--animated' : ''}`}
+          style={{ transform: `translate(${tabInd.left}px, ${tabInd.top}px)`, width: tabInd.width, height: tabInd.height, opacity: tabInd.width ? 1 : 0 }}
+          aria-hidden="true"
+        />
         {TABS.map(t => (
-          <button key={t.id} className={`tab-btn ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
+          <button key={t.id} data-tab={t.id} className={`tab-btn ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>
             {t.label}
           </button>
         ))}
