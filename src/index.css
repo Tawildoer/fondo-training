@@ -118,7 +118,7 @@ img, svg, video, canvas { max-width: 100%; }
    keeps a fixed position/height); it collapses to a single stacked column below
    the breakpoint. A grid, not CSS columns, so cards don't reflow/jump as the
    window width changes. */
-.ov-cols { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: stretch; }
+.ov-cols { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: stretch; margin-bottom: 1rem; }
 .ov-cols > .card { margin-bottom: 0; }
 @media (min-width: 760px) {
   .ov-cols { grid-template-columns: 1fr 1fr; }
