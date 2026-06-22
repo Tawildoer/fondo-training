@@ -390,7 +390,14 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
   const doneThisWeek = weekSessions.filter(isDone).length
   const plannedHrs = Math.round(weekSessions.reduce((a, s) => a + parseLeadingMinutes(s.session.desc), 0) / 60 * 10) / 10
   const doneHrs = Math.round(weekSessions.filter(isDone).reduce((a, s) => a + parseLeadingMinutes(s.session.desc), 0) / 60 * 10) / 10
-  const weekPct = plannedThisWeek ? Math.round((doneThisWeek / plannedThisWeek) * 100) : 0
+
+  // Progress bar counts the whole week including rest days, which auto-complete
+  // (resting on a rest day *is* sticking to the plan).
+  const weekAll = getScheduledSessions(plan, { includeRest: true, base: planStart })
+    .filter(s => s.date >= wkStart && s.date <= wkEnd)
+  const isComplete = s => s.session.zone === 'rest' || isDone(s)
+  const barPlanned = weekAll.length
+  const weekPct = barPlanned ? Math.round((weekAll.filter(isComplete).length / barPlanned) * 100) : 0
 
   // Pair each of this week's sessions with the ride that landed on its day, so
   // the coach can weigh prescribed-vs-actual hard-zone minutes.
