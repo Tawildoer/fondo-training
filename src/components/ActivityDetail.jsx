@@ -106,7 +106,7 @@ function PlannedVsActual({ session, activity, ftp, maxHr }) {
   )
 }
 
-export default function ActivityDetail({ activity, session, ftp, maxHr }) {
+export default function ActivityDetail({ activity, session, ftp, maxHr, showCoach = true }) {
   if (!activity) return null
   const km = activity.distance_m ? (activity.distance_m / 1000).toFixed(1) : null
   const hasStreams = activity.streams && (activity.streams.watts || activity.streams.heartrate)
@@ -123,7 +123,7 @@ export default function ActivityDetail({ activity, session, ftp, maxHr }) {
   return (
     <div style={{ marginTop: 10, paddingTop: 10, borderTop: '0.5px solid rgba(0,0,0,0.1)' }}>
       {session && <PlannedVsActual session={session} activity={activity} ftp={ftp} maxHr={maxHr} />}
-      <RideCoach activity={activity} session={session} ftp={ftp} />
+      {showCoach && <RideCoach activity={activity} session={session} ftp={ftp} />}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, marginTop: session ? 10 : 0 }}>
         <i className="ti ti-brand-strava" style={{ fontSize: 14, color: '#FC4C02' }} aria-hidden="true" />
         <span style={{ fontSize: 12, fontWeight: 600 }}>{activity.name || 'Strava ride'}</span>

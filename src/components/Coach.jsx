@@ -65,7 +65,7 @@ export function RideCoach({ activity, session, ftp }) {
   if (!a) return null
   return (
     <div style={{ marginBottom: 10 }}>
-      <CoachShell tone={a.tone} title={a.title} msg={a.msg}>
+      <CoachShell tone={a.tone} title={a.title} msg={a.msg} theme="site">
         <ZoneStrip min={a.tiz.min} totalMin={a.tiz.totalMin} />
       </CoachShell>
     </div>
@@ -76,21 +76,25 @@ export function RideCoach({ activity, session, ftp }) {
 function WeekBars({ bars }) {
   const peak = Math.max(1, ...bars.map(b => Math.max(b.prescribed, b.actual)))
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 10 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 12 }}>
       {bars.map(b => (
-        <div key={b.zone} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
+        <div key={b.zone} style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 11 }}>
           <span style={{ width: 22, fontWeight: 700, color: 'var(--color-text-muted)' }}>{b.zone.toUpperCase()}</span>
-          <div style={{ flex: 1, position: 'relative', height: 8, borderRadius: 5, background: 'var(--color-surface2)' }}>
-            {/* prescribed target marker */}
-            <div style={{ position: 'absolute', left: `${(b.prescribed / peak) * 100}%`, top: -2, bottom: -2, width: 2, background: 'var(--color-text-muted)', opacity: 0.7 }} title={`Target ${b.prescribed} min`} />
+          <div style={{ flex: 1, position: 'relative', height: 14, borderRadius: 7, background: 'var(--color-surface)', border: '0.5px solid var(--color-border)', overflow: 'hidden' }}>
             {/* actual fill */}
-            <div style={{ width: `${Math.min(100, (b.actual / peak) * 100)}%`, height: '100%', borderRadius: 5, background: `var(--zone-${b.zone}-bg)` }} />
+            <div style={{ width: `${Math.min(100, (b.actual / peak) * 100)}%`, height: '100%', borderRadius: 7, background: `var(--zone-${b.zone}-bg)` }} />
+            {/* prescribed target marker — full-height, high-contrast line */}
+            <div style={{ position: 'absolute', left: `${(b.prescribed / peak) * 100}%`, top: 0, bottom: 0, width: 3, marginLeft: -1.5, background: 'var(--color-text)', borderRadius: 2 }} title={`Target ${b.prescribed} min`} />
           </div>
-          <span style={{ width: 78, textAlign: 'right', color: 'var(--color-text-muted)' }}>
-            <strong style={{ color: 'var(--color-text)' }}>{b.actual}</strong> / {b.prescribed} min
+          <span style={{ width: 82, textAlign: 'right', color: 'var(--color-text-muted)' }}>
+            <strong style={{ color: 'var(--color-text)', fontSize: 12 }}>{b.actual}</strong> / {b.prescribed} min
           </span>
         </div>
       ))}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--color-text-muted)' }}>
+        <span style={{ width: 3, height: 11, background: 'var(--color-text)', borderRadius: 2, display: 'inline-block' }} />
+        Target · bar = done
+      </div>
     </div>
   )
 }
