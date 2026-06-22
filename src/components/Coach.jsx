@@ -36,7 +36,7 @@ function ZoneStrip({ min, totalMin }) {
   )
 }
 
-function CoachShell({ tone, title, msg, theme = 'tone', children }) {
+function CoachShell({ tone, title, msg, theme = 'tone', fill = false, children }) {
   const t = TONE[tone] || TONE.note
   // 'site' theme keeps the weekly coach on the electric palette (surface +
   // brand-blue / violet accents) instead of the green/amber pastel.
@@ -47,14 +47,16 @@ function CoachShell({ tone, title, msg, theme = 'tone', children }) {
     : { background: t.bg }
   const headColor = site ? accent : t.color
   return (
-    <div style={{ ...wrap, borderRadius: 'var(--radius-sm)', padding: '11px 13px', marginBottom: 4 }}>
+    <div style={{ ...wrap, borderRadius: 'var(--radius-sm)', padding: '11px 13px', marginBottom: 4, ...(fill ? { flex: 1, display: 'flex', flexDirection: 'column' } : null) }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
         <i className={`ti ${t.icon}`} style={{ fontSize: 15, color: headColor }} aria-hidden="true" />
         <span style={{ fontSize: 12, fontWeight: 700, color: headColor }}>Coach</span>
         <span style={{ fontSize: 12, fontWeight: 700 }}>· {title}</span>
       </div>
       <p style={{ fontSize: 12.5, lineHeight: 1.45, color: 'var(--color-text)' }}>{msg}</p>
-      {children}
+      {/* When filling, pin the bar visual to the bottom so both coach cards line
+          up symmetrically (heading/message at top, bars at the bottom). */}
+      {children && <div style={fill ? { marginTop: 'auto' } : undefined}>{children}</div>}
     </div>
   )
 }
@@ -65,9 +67,9 @@ export function LastRideCoach({ activity, session, ftp }) {
   const a = analyzeRide(activity, session, ftp)
   if (!a) return null
   return (
-    <div className="card wgt-2">
+    <div className="card wgt-2" style={{ display: 'flex', flexDirection: 'column' }}>
       <h2>Coach · last ride</h2>
-      <CoachShell tone={a.tone} title={a.title} msg={a.msg} theme="site">
+      <CoachShell tone={a.tone} title={a.title} msg={a.msg} theme="site" fill>
         <ZoneStrip min={a.tiz.min} totalMin={a.tiz.totalMin} />
       </CoachShell>
     </div>
@@ -106,9 +108,9 @@ export function WeekCoach({ planned, rides, ftp }) {
   const a = analyzeRolling7(planned, rides, ftp)
   if (!a) return null
   return (
-    <div className="card wgt-2">
+    <div className="card wgt-2" style={{ display: 'flex', flexDirection: 'column' }}>
       <h2>Coach · last 7 days</h2>
-      <CoachShell tone={a.tone} title={a.title} msg={a.msg} theme="site">
+      <CoachShell tone={a.tone} title={a.title} msg={a.msg} theme="site" fill>
         {a.bars?.length > 0 && <WeekBars bars={a.bars} />}
       </CoachShell>
     </div>
