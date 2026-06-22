@@ -1,110 +1,105 @@
 import { useState } from 'react'
-import { ZONE_DEFINITIONS, getZoneWatts } from '../lib/planGenerator'
+import { ZONE_DEFINITIONS } from '../lib/planGenerator'
 
+// HR zones run on their own %-of-max curve (not the power %FTP curve), shown
+// alongside power so each zone reads as one thing.
 const HR_ZONE_FACTORS = [
-  { z: 'Z1', name: 'Recovery',  factors: [0.50, 0.60] },
-  { z: 'Z2', name: 'Endurance', factors: [0.60, 0.72] },
-  { z: 'Z3', name: 'Tempo',     factors: [0.72, 0.82] },
-  { z: 'Z4', name: 'Threshold', factors: [0.82, 0.89] },
-  { z: 'Z5', name: 'VO2 max',   factors: [0.89, 1.00] },
+  [0.50, 0.60],
+  [0.60, 0.72],
+  [0.72, 0.82],
+  [0.82, 0.89],
+  [0.89, 1.00],
 ]
 
+// One-line purpose per zone — the inline explainer that replaces the old tables.
+const ZONE_PURPOSE = {
+  Z1: 'Very easy spinning — active recovery between hard days.',
+  Z2: 'All-day aerobic pace. The bulk of your riding lives here.',
+  Z3: 'Comfortably hard, sustainable for long efforts.',
+  Z4: 'Right around FTP — the work that lifts your ceiling.',
+  Z5: 'Short, very hard intervals for top-end power.',
+}
+
+const r = n => Math.round(n)
+
+// Compact FTP progression sparkline. Lives in a constrained column so it can't
+// balloon to full page width.
 function FtpChart({ history }) {
-  const W = 320, H = 130, padL = 6, padR = 6, padT = 14, padB = 22
+  const W = 300, H = 84, padL = 6, padR = 6, padT = 12, padB = 18
   const values = history.map(h => h.ftp)
   const min = Math.min(...values)
   const max = Math.max(...values)
   const range = (max - min) || 1
   const n = history.length
-
-  const xAt = i => n === 1 ? W / 2 : padL + (i / (n - 1)) * (W - padL - padR)
+  const xAt = i => (n === 1 ? W / 2 : padL + (i / (n - 1)) * (W - padL - padR))
   const yAt = v => padT + (1 - (v - min) / range) * (H - padT - padB)
-
   const points = history.map((h, i) => ({ x: xAt(i), y: yAt(h.ftp), ftp: h.ftp, date: new Date(h.recorded_at) }))
   const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
   const areaPath = n > 1 ? `${linePath} L ${xAt(n - 1).toFixed(1)} ${(H - padB).toFixed(1)} L ${xAt(0).toFixed(1)} ${(H - padB).toFixed(1)} Z` : ''
-
-  const first = history[0]
-  const last = history[history.length - 1]
-  const delta = last.ftp - first.ftp
   const fmt = d => new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', fontWeight: 700, letterSpacing: '-0.03em' }}>{last.ftp}W</span>
-        {n > 1 && (
-          <span style={{
-            fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 20,
-            background: delta >= 0 ? 'var(--color-green-light)' : 'var(--color-red-light)',
-            color: delta >= 0 ? 'var(--color-green-text)' : 'var(--color-red-text)',
-          }}>
-            {delta >= 0 ? '+' : ''}{delta}W since {fmt(first.recorded_at)}
-          </span>
-        )}
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
-        <defs>
-          <linearGradient id="ftpFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.34" />
-            <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {n > 1 && <path d={areaPath} fill="url(#ftpFill)" stroke="none" />}
-        {n > 1 && <path d={linePath} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
-        {points.map((p, i) => (
-          <g key={i}>
-            <circle cx={p.x} cy={p.y} r="3.5" fill="var(--color-accent)" />
-            {(i === 0 || i === n - 1 || n === 1) && (
-              <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="9" fill="var(--color-text-muted)" fontWeight="600">{p.ftp}</text>
-            )}
-            <text x={Math.min(Math.max(p.x, 14), W - 14)} y={H - 6} textAnchor="middle" fontSize="8" fill="var(--color-text-faint)">
-              {fmt(p.date)}
-            </text>
-          </g>
-        ))}
-      </svg>
-    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
+      <defs>
+        <linearGradient id="ftpFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.34" />
+          <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {n > 1 && <path d={areaPath} fill="url(#ftpFill)" stroke="none" />}
+      {n > 1 && <path d={linePath} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
+      {points.map((p, i) => (
+        <g key={i}>
+          <circle cx={p.x} cy={p.y} r="3" fill="var(--color-accent)" />
+          {(i === 0 || i === n - 1 || n === 1) && (
+            <text x={p.x} y={p.y - 7} textAnchor="middle" fontSize="9" fill="var(--color-text-muted)" fontWeight="600">{p.ftp}</text>
+          )}
+          <text x={Math.min(Math.max(p.x, 14), W - 14)} y={H - 5} textAnchor="middle" fontSize="8" fill="var(--color-text-faint)">{fmt(p.date)}</text>
+        </g>
+      ))}
+    </svg>
   )
 }
 
-function ZoneTable({ columns, rows }) {
+// The zone "ladder": one graph — each zone is a bar placed on a shared 0→120%
+// FTP axis — with watts, HR and a purpose line inline as the explainer.
+function ZoneLadder({ ftp, maxHR }) {
+  const MAXF = 1.2
   return (
-    <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-      <thead>
-        <tr>
-          {columns.map(col => (
-            <th key={col.key} style={{
-              textAlign: col.align || 'left', paddingBottom: 10, fontWeight: 600,
-              fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em',
-              color: 'var(--color-text-muted)',
-            }}>
-              {col.label}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, i) => (
-          <tr key={i} style={{ borderTop: '0.5px solid var(--color-border)' }}>
-            {columns.map(col => (
-              <td key={col.key} style={{
-                padding: '8px 0', textAlign: col.align || 'left',
-                paddingRight: col.align === 'right' ? 0 : 12,
-              }}>
-                {row[col.key]}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {ZONE_DEFINITIONS.map((z, i) => {
+        const [lo, hi] = z.factors
+        const left = (lo / MAXF) * 100
+        const width = ((hi - lo) / MAXF) * 100
+        const watts = ftp ? `${r(lo * ftp)}–${r(hi * ftp)}W` : null
+        const [hlo, hhi] = HR_ZONE_FACTORS[i]
+        const bpm = maxHR ? `${r(hlo * maxHR)}–${r(hhi * maxHR)} bpm` : null
+        return (
+          <div key={z.z} style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
+            <span className={`sess-${z.z.toLowerCase()}`} style={{ flexShrink: 0, width: 30, textAlign: 'center', padding: '3px 0', borderRadius: 6, fontWeight: 700, fontSize: 11, marginTop: 1 }}>{z.z}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{z.name} <span style={{ color: 'var(--color-text-faint)', fontWeight: 400 }}>· {r(lo * 100)}–{r(hi * 100)}%</span></span>
+                <span style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 600 }}>{watts}{watts && bpm ? ' · ' : ''}{bpm}</span>
+              </div>
+              {/* position bar on the shared FTP axis */}
+              <div style={{ position: 'relative', height: 8, borderRadius: 5, background: 'var(--color-surface2)', margin: '5px 0 4px' }}>
+                <div style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, top: 0, bottom: 0, borderRadius: 5, background: `var(--zone-${z.z.toLowerCase()}-bg)` }} />
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', lineHeight: 1.45 }}>{ZONE_PURPOSE[z.z]}</div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
 export default function PowerZones({ user, onUpdateFTP, ftpHistory = [] }) {
   const [ftpInput, setFtpInput] = useState('')
   const [saving, setSaving] = useState(false)
+  const ftp = user.ftp
+  const maxHR = user.max_hr
 
   async function handleFTPSubmit(e) {
     e.preventDefault()
@@ -116,134 +111,63 @@ export default function PowerZones({ user, onUpdateFTP, ftpHistory = [] }) {
     setSaving(false)
   }
 
-  const ftp = user.ftp
-  const maxHR = user.max_hr
-
-  const powerRows = ZONE_DEFINITIONS.map(zone => {
-    const w = getZoneWatts(zone.z, ftp)
-    return {
-      zone: (
-        <span className={`sess-${zone.z.toLowerCase()}`} style={{ padding: '2px 10px', borderRadius: 20, fontWeight: 600, fontSize: 12 }}>
-          {zone.z}
-        </span>
-      ),
-      name: <span style={{ fontWeight: 500 }}>{zone.name}</span>,
-      range: <span style={{ fontWeight: 600 }}>{w ? `${w.lo}–${w.hi}W` : '—'}</span>,
-      pct: <span style={{ color: 'var(--color-text-muted)' }}>{Math.round(zone.factors[0] * 100)}–{Math.round(zone.factors[1] * 100)}%</span>,
-    }
-  })
-
-  const hrRows = HR_ZONE_FACTORS.map(zone => {
-    const lo = Math.round(zone.factors[0] * maxHR)
-    const hi = Math.round(zone.factors[1] * maxHR)
-    return {
-      zone: (
-        <span className={`sess-${zone.z.toLowerCase()}`} style={{ padding: '2px 10px', borderRadius: 20, fontWeight: 600, fontSize: 12 }}>
-          {zone.z}
-        </span>
-      ),
-      name: <span style={{ fontWeight: 500 }}>{zone.name}</span>,
-      range: <span style={{ fontWeight: 600 }}>{lo}–{hi} bpm</span>,
-      pct: <span style={{ color: 'var(--color-text-muted)' }}>{Math.round(zone.factors[0] * 100)}–{Math.round(zone.factors[1] * 100)}%</span>,
-    }
-  })
-
-  const tableCols = [
-    { key: 'zone', label: 'Zone' },
-    { key: 'name', label: 'Name' },
-    { key: 'range', label: 'Range', align: 'right' },
-    { key: 'pct', label: '% Max', align: 'right' },
-  ]
+  const first = ftpHistory[0]
+  const last = ftpHistory[ftpHistory.length - 1]
+  const delta = first && last ? last.ftp - first.ftp : 0
+  const fmt = d => new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
   return (
     <div>
-      <div className="card">
-        <h2>Update FTP</h2>
-        <form onSubmit={handleFTPSubmit} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-          <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-            <label htmlFor="ftp-update">New FTP (watts)</label>
-            <input
-              id="ftp-update"
-              type="number"
-              value={ftpInput}
-              onChange={e => setFtpInput(e.target.value)}
-              placeholder={ftp ? `Current: ${ftp}W` : 'e.g. 250'}
-              min="50" max="600"
-            />
+      {/* FTP: current value + update + a compact progression, two-up on desktop. */}
+      <div className="card wgt-2">
+        <h2>FTP</h2>
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <div style={{ flex: '1 1 220px', minWidth: 200 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.03em' }}>{ftp ? `${ftp}W` : '—'}</span>
+              {ftpHistory.length > 1 && (
+                <span style={{ fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: delta >= 0 ? 'var(--color-green-light)' : 'var(--color-red-light)', color: delta >= 0 ? 'var(--color-green-text)' : 'var(--color-red-text)' }}>
+                  {delta >= 0 ? '+' : ''}{delta}W since {fmt(first.recorded_at)}
+                </span>
+              )}
+            </div>
+            <form onSubmit={handleFTPSubmit} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <div className="field" style={{ flex: 1, marginBottom: 0 }}>
+                <label htmlFor="ftp-update">Update FTP (watts)</label>
+                <input id="ftp-update" type="number" value={ftpInput} onChange={e => setFtpInput(e.target.value)} placeholder={ftp ? `Current: ${ftp}W` : 'e.g. 250'} min="50" max="600" />
+              </div>
+              <button type="submit" className="btn btn-primary" disabled={saving || !ftpInput}>{saving ? 'Saving…' : 'Update'}</button>
+            </form>
+            <p style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 7 }}>
+              Recalculates zones and regenerates plan targets. Re-test every 4–6 weeks (recovery weeks are ideal).
+            </p>
           </div>
-          <button type="submit" className="btn btn-primary" disabled={saving || !ftpInput}>
-            {saving ? 'Saving…' : 'Update'}
-          </button>
-        </form>
-        <p style={{ fontSize: 12, color: 'var(--color-text-faint)', marginTop: 8 }}>
-          Updating your FTP recalculates all zones and regenerates your plan targets.
-        </p>
+          <div style={{ flex: '1 1 260px', minWidth: 240, maxWidth: 460 }}>
+            {ftpHistory.length > 0 ? (
+              <FtpChart history={ftpHistory} />
+            ) : (
+              <div className="tip-box" style={{ marginBottom: 0 }}>
+                <i className="ti ti-chart-line" aria-hidden="true" />
+                <span>Your FTP progression charts here as you log updates.</span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {ftp && (
-        <div className="card">
-          <h2>FTP progression</h2>
-          {ftpHistory.length > 0 ? (
-            <FtpChart history={ftpHistory} />
-          ) : (
-            <div className="tip-box" style={{ marginBottom: 0 }}>
-              <i className="ti ti-chart-line" aria-hidden="true" />
-              <span>Your FTP progression will chart here as you log updates. Update your FTP above after each test to track gains over time.</span>
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="card">
-        <h2>Power zones{ftp ? ` — FTP ${ftp}W` : ''}</h2>
+        <h2>Training zones{ftp ? ` — FTP ${ftp}W` : ''}{maxHR ? ` · max HR ${maxHR} bpm` : ''}</h2>
         {!ftp ? (
           <div className="tip-box">
             <i className="ti ti-info-circle" aria-hidden="true" />
             <span>
-              Set your FTP above to see personalised power targets. If you don't know your FTP,
-              ride all-out for 20 minutes and take 95% of your average power.
+              Set your FTP above to see personalised zones. If you don't know it, ride all-out for
+              20 minutes and take 95% of your average power.
             </span>
           </div>
         ) : (
-          <ZoneTable columns={tableCols} rows={powerRows} />
+          <ZoneLadder ftp={ftp} maxHR={maxHR} />
         )}
-      </div>
-
-      {maxHR && (
-        <div className="card">
-          <h2>Heart rate zones — max HR {maxHR} bpm</h2>
-          <ZoneTable columns={tableCols} rows={hrRows} />
-        </div>
-      )}
-
-      <div className="card">
-        <h2>How to test your FTP</h2>
-        <div className="tip-box" style={{ marginBottom: 12 }}>
-          <i className="ti ti-calendar" aria-hidden="true" />
-          <span>Re-test every 4–6 weeks. Recovery weeks in your plan are the ideal time — your legs are fresh and the result will be accurate.</span>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {[
-            {
-              icon: 'ti-clock',
-              title: '20-minute test',
-              desc: 'Warm up for 20 min including a short hard effort. Then ride absolutely all-out for 20 minutes. Take 95% of your average power as your new FTP.',
-            },
-            {
-              icon: 'ti-stairs-up',
-              title: 'Ramp test',
-              desc: 'Start easy and increase power by a fixed step each minute until you can\'t hold the power. Your FTP ≈ 75% of your best 1-minute power. Many smart trainers run this automatically.',
-            },
-          ].map(tip => (
-            <div key={tip.title} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              <i className={`ti ${tip.icon}`} style={{ fontSize: 18, color: 'var(--color-accent)', flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 3 }}>{tip.title}</div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.55 }}>{tip.desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   )

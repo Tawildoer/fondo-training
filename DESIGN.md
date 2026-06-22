@@ -60,8 +60,12 @@ Cool → warm = easy → hard. Gradients `--zone-z{1..5}-bg` with matching `-fg`
   single stacked column below it. Use a grid (stable card position/height), not CSS
   `column-count` masonry, so cards don't reflow as the width changes. Prefer dense
   multi-column desktop layouts for new card-heavy sections rather than one card per row.
-- **Widget height standard.** Cards in the same grid row match height automatically (the
-  grid stretches them). Give widgets a consistent min-height rhythm with `.wgt-{1,2,3}`
-  (`--widget-unit` = 100px): `.wgt-1` for small notes/indicators, `.wgt-2` for cards
-  (coach), `.wgt-3` for graphs. Pair like-sized widgets in a row so stretched cards don't
-  show large empty space.
+- **Widget height standard — applies to every tab.** Cards in the same grid row match
+  height automatically (the grid stretches them). Give widgets a consistent min-height
+  rhythm with `.wgt-{1,2,3}` (`--widget-unit` = 100px): `.wgt-1` for small notes/
+  indicators, `.wgt-2` for cards (coach, FTP), `.wgt-3` for graphs. Pair like-sized
+  widgets in a row so stretched cards don't show large empty space. Use this everywhere,
+  not just Overview/Analytics.
+- **Charts must be width-constrained.** A `viewBox` SVG at `width:100%` scales its height
+  with the container, so a full-width chart becomes huge on desktop. Keep charts inside a
+  half-width grid column or a `max-width` wrapper (~460–560px) so they stay compact.
