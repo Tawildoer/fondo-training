@@ -56,6 +56,7 @@ Cool → warm = easy → hard. Gradients `--zone-z{1..5}-bg` with matching `-fg`
 - Inputs use `16px` font on mobile to stop iOS auto-zoom; the hero stacks vertically
   ≤600px. Keep new layouts responsive at that breakpoint.
 - Desktop should be **information-dense**: the shell widens to 1120px ≥1000px, and
-  secondary card stacks pack into two masonry columns ≥760px (`.ov-cols`) while
-  phones/tablets stay single-column. Prefer dense multi-column desktop layouts for new
-  card-heavy sections rather than one card per row.
+  secondary card stacks use a two-column grid ≥760px (`.ov-cols`) that collapses to a
+  single stacked column below it. Use a grid (stable card position/height), not CSS
+  `column-count` masonry, so cards don't reflow as the width changes. Prefer dense
+  multi-column desktop layouts for new card-heavy sections rather than one card per row.

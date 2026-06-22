@@ -112,12 +112,14 @@ img, svg, video, canvas { max-width: 100%; }
   .app-shell { max-width: 1120px; }
 }
 
-/* Desktop packs secondary Overview cards into balanced masonry columns,
-   making far denser use of the width. Mobile/tablet stays single-column. */
-.ov-cols > .card { margin-bottom: 1rem; }
+/* Desktop lays secondary Overview cards in a stable two-column grid (each card
+   keeps a fixed position/height); it collapses to a single stacked column below
+   the breakpoint. A grid, not CSS columns, so cards don't reflow/jump as the
+   window width changes. */
+.ov-cols { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: start; }
+.ov-cols > .card { margin-bottom: 0; }
 @media (min-width: 760px) {
-  .ov-cols { column-count: 2; column-gap: 1rem; }
-  .ov-cols > * { break-inside: avoid; }
+  .ov-cols { grid-template-columns: 1fr 1fr; }
 }
 
 /* ── Hero header ── */
