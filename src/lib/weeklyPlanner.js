@@ -174,7 +174,7 @@ export const ZONE_OPTIONS = [
   { zone: 'rest', label: 'Rest' },
 ]
 
-const ZONE_META = {
+export const ZONE_META = {
   z1: { name: 'Recovery spin', min: 30, max: 60 },
   z2: { name: 'Endurance', min: 40, max: 300 },
   z3: { name: 'Sweet spot', min: 45, max: 120 },

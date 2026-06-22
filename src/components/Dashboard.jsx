@@ -214,6 +214,8 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
       ? buildSession(cur.day, 'rest', 0, user.ftp)
       : buildSession(cur.day, zone, patch.minutes ?? cur.durationMin ?? 60, user.ftp, cur.name === 'Long ride')
     const sessions = row.sessions.map((s, i) => (i === idx ? updated : s))
+    // Reflect the edit immediately; reconcile with the server row when it lands.
+    setPlannedWeeks(prev => prev.map(w => (w.week_num === weekNumE ? { ...w, sessions } : w)))
     const saved = await upsertPlannedWeek(user.id, weekNumE, { sessions })
     if (saved) setPlannedWeeks(prev => prev.map(w => (w.week_num === weekNumE ? saved : w)))
   }

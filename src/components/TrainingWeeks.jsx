@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { RPE_LABELS } from '../lib/planGenerator'
 import { getSessionDate } from '../lib/schedule'
 import { matchActivityToDate } from '../lib/strava'
-import { ZONE_OPTIONS } from '../lib/weeklyPlanner'
+import { ZONE_OPTIONS, ZONE_META } from '../lib/weeklyPlanner'
 import ActivityDetail from './ActivityDetail'
 
 const fmtMin = m => (m >= 90 ? `${Math.round(m / 30) * 30 / 60} hr` : `${m} min`)
@@ -45,13 +45,24 @@ function SessionEditor({ session, onChange }) {
           )
         })}
       </div>
-      {session.zone !== 'rest' && (
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-          <button onClick={() => onChange({ minutes: Math.max(15, mins - 15) })} aria-label="Less time" style={stepBtnSm}>−</button>
-          <span style={{ minWidth: 54, textAlign: 'center', fontSize: 13, fontWeight: 600 }}>{fmtMin(mins)}</span>
-          <button onClick={() => onChange({ minutes: Math.min(240, mins + 15) })} aria-label="More time" style={stepBtnSm}>+</button>
-        </div>
-      )}
+      {session.zone !== 'rest' && (() => {
+        // Honour the same per-zone duration cap buildSession enforces, so the
+        // stepper can't propose a value that silently clamps back to where it
+        // was (which looked like a dead button).
+        const meta = ZONE_META[session.zone] || ZONE_META.z2
+        const atMax = mins >= meta.max
+        const atMin = mins <= 15
+        return (
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+            <button onClick={() => !atMin && onChange({ minutes: Math.max(15, mins - 15) })} disabled={atMin}
+              aria-label="Less time" style={{ ...stepBtnSm, opacity: atMin ? 0.4 : 1, cursor: atMin ? 'default' : 'pointer' }}>−</button>
+            <span style={{ minWidth: 54, textAlign: 'center', fontSize: 13, fontWeight: 600 }}>{fmtMin(mins)}</span>
+            <button onClick={() => !atMax && onChange({ minutes: Math.min(meta.max, mins + 15) })} disabled={atMax}
+              aria-label="More time" title={atMax ? `Max for ${session.zone.toUpperCase()} is ${fmtMin(meta.max)}` : undefined}
+              style={{ ...stepBtnSm, opacity: atMax ? 0.4 : 1, cursor: atMax ? 'default' : 'pointer' }}>+</button>
+          </div>
+        )
+      })()}
     </div>
   )
 }
