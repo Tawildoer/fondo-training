@@ -265,8 +265,6 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
       {needsPlan && <PlanWeekCTA onPlanWeek={onPlanWeek} />}
       <CatchUpCard unconfirmed={unconfirmed} onToggle={onToggle} onBail={onBail} onRPE={onRPE} />
       <AdaptationBanner adaptation={adaptation} />
-      <TodayCard plan={plan} sessionState={sessionState} planStart={planStart} onToggle={onToggle} onBail={onBail} />
-      <StravaCard strava={strava} />
 
       <div className="stats-grid">
         <div className="stat-card"><div className="val">{user.ftp ? user.ftp + 'W' : '—'}</div><div className="lbl">FTP</div></div>
@@ -274,6 +272,9 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
         <div className="stat-card"><div className="val">{plannedThisWeek ? `${doneHrs}/${plannedHrs}h` : '—'}</div><div className="lbl">Hours this week</div></div>
         <div className="stat-card"><div className="val">{loadCtx?.currentCtl || '—'}</div><div className="lbl">Fitness (CTL)</div></div>
       </div>
+
+      <TodayCard plan={plan} sessionState={sessionState} planStart={planStart} onToggle={onToggle} onBail={onBail} />
+      <StravaCard strava={strava} />
 
       {/* This-week progress bar */}
       <div style={{ marginBottom: '1.5rem' }}>
