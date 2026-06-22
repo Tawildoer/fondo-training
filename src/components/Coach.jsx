@@ -65,7 +65,7 @@ export function LastRideCoach({ activity, session, ftp }) {
   const a = analyzeRide(activity, session, ftp)
   if (!a) return null
   return (
-    <div className="card">
+    <div className="card wgt-2">
       <h2>Coach · last ride</h2>
       <CoachShell tone={a.tone} title={a.title} msg={a.msg} theme="site">
         <ZoneStrip min={a.tiz.min} totalMin={a.tiz.totalMin} />
@@ -106,7 +106,7 @@ export function WeekCoach({ weekItems, ftp }) {
   const a = analyzeWeek(weekItems, ftp)
   if (!a) return null
   return (
-    <div className="card">
+    <div className="card wgt-2">
       <h2>Coach · this week</h2>
       <CoachShell tone={a.tone} title={a.title} msg={a.msg} theme="site">
         {a.bars?.length > 0 && <WeekBars bars={a.bars} />}

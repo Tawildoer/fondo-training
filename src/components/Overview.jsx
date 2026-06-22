@@ -227,7 +227,7 @@ function ProjectionChart({ series, events }) {
   }).filter(Boolean)
 
   return (
-    <div className="card">
+    <div className="card wgt-3">
       <h2>Fitness trajectory</h2>
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 10, fontSize: 12, color: 'var(--color-text-muted)' }}>
         <span>Now <strong style={{ color: 'var(--color-text)' }}>{start} CTL</strong></span>
@@ -299,7 +299,7 @@ function TrainingLoadCard({ plan, sessionState, activities, user, planStart }) {
 
   if (!hasData) {
     return (
-      <div className="card">
+      <div className="card wgt-3">
         <h2>Training load</h2>
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
           Complete a few sessions (or sync some rides) and your fitness, fatigue and form
@@ -324,7 +324,7 @@ function TrainingLoadCard({ plan, sessionState, activities, user, planStart }) {
   const form = formMeta(current.tsb)
 
   return (
-    <div className="card">
+    <div className="card wgt-3">
       <h2>Training load</h2>
 
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 12 }}>

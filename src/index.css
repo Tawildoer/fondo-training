@@ -43,6 +43,8 @@
   --zone-z5-bg: linear-gradient(135deg, #C8392A, #FF6F4D);  --zone-z5-fg: #ffffff; /* VO₂ — coral */
   --radius: 10px;
   --radius-sm: 6px;
+  /* Widget height standard: 1 unit ≈ a small note/indicator, 3 ≈ a graph. */
+  --widget-unit: 100px;
 }
 
 /* Always use the dark "moody" palette, regardless of the OS light/dark
@@ -116,11 +118,18 @@ img, svg, video, canvas { max-width: 100%; }
    keeps a fixed position/height); it collapses to a single stacked column below
    the breakpoint. A grid, not CSS columns, so cards don't reflow/jump as the
    window width changes. */
-.ov-cols { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: start; }
+.ov-cols { display: grid; grid-template-columns: 1fr; gap: 1rem; align-items: stretch; }
 .ov-cols > .card { margin-bottom: 0; }
 @media (min-width: 760px) {
   .ov-cols { grid-template-columns: 1fr 1fr; }
 }
+
+/* Widget height standard. Cards in the same grid row already match height
+   (the grid stretches them); these set the consistent min-height rhythm so a
+   row's natural height is sensible — 1u for notes/indicators, 3u for graphs. */
+.wgt-1 { min-height: var(--widget-unit); }
+.wgt-2 { min-height: calc(var(--widget-unit) * 2); }
+.wgt-3 { min-height: calc(var(--widget-unit) * 3); }
 
 /* ── Hero header ── */
 .hero {
