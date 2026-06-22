@@ -6,7 +6,7 @@ import { parseLeadingMinutes, computeTrainingLoad } from '../lib/trainingLoad'
 import { loadSessionState, upsertSessionState, loadAdjustments, addAdjustment, deleteAdjustment, updateUser, loadFtpHistory, addFtpEntry, getStravaAccount, loadActivities, loadPlannedWeeks, upsertPlannedWeek, deletePlannedWeek, loadEvents, addEvent, updateEvent, deleteEvent } from '../lib/supabase'
 import { syncStrava, getStravaAuthUrl, stravaConfigured, getStravaAutoCompletions } from '../lib/strava'
 import TrainingWeeks from './TrainingWeeks'
-import PowerZones from './PowerZones'
+import Analytics from './Analytics'
 import Adjustments from './Adjustments'
 import Overview from './Overview'
 import CalendarView from './CalendarView'
@@ -331,7 +331,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     { id: 'plan-week', label: 'Plan week' },
     { id: 'calendar', label: 'Calendar' },
     { id: 'training', label: 'Training weeks' },
-    { id: 'zones', label: 'Power zones' },
+    { id: 'analytics', label: 'Analytics' },
   ]
 
   return (
@@ -381,7 +381,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
           {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={upcomingEvent?.name} events={effectiveEvents} onAddEvent={handleAddEvent} onUpdateEvent={handleUpdateEvent} onDeleteEvent={handleDeleteEvent} />}
           {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} realCurrentWeek={realCurrentWeek} user={user} strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onSync: handleSyncStrava }} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} onEditSession={handleEditSession} />}
           {tab === 'guide' && <PlanGuide plan={adjustedPlan} user={user} />}
-          {tab === 'zones' && <PowerZones user={user} onUpdateFTP={handleUpdateFTP} ftpHistory={ftpHistory} />}
+          {tab === 'analytics' && <Analytics user={user} onUpdateFTP={handleUpdateFTP} ftpHistory={ftpHistory} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} activities={activities} events={effectiveEvents} loadCtx={loadCtx} plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} />}
 {tab === 'adjustments' && <Adjustments user={user} adjustments={adjustments} plan={adjustedPlan} onAdd={handleAddAdjustment} onDelete={handleDeleteAdjustment} onUpdateFTP={handleUpdateFTP} />}
         </>
       )}
