@@ -110,42 +110,6 @@ function CatchUpCard({ unconfirmed, onToggle, onBail, onRPE }) {
   )
 }
 
-function StreakCard({ streak }) {
-  const current = streak?.current || 0
-  const best = streak?.best || 0
-  if (!current && !best) return null
-
-  const hot = current > 0
-  return (
-    <div className="card" style={{
-      display: 'flex', alignItems: 'center', gap: 14,
-      background: hot ? 'var(--grad-hero)' : 'var(--color-surface)',
-      border: hot ? 'none' : '0.5px solid var(--color-border)',
-      color: hot ? '#fff' : 'inherit',
-    }}>
-      <div style={{
-        fontSize: 30, lineHeight: 1, flexShrink: 0,
-        filter: hot ? 'none' : 'grayscale(1) opacity(0.5)',
-      }} aria-hidden="true">🔥</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', fontWeight: 700, letterSpacing: '-0.03em', color: hot ? 'var(--color-electric)' : 'var(--color-text)' }}>
-            {current}
-          </span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: hot ? '#fff' : 'var(--color-text-muted)' }}>
-            session{current === 1 ? '' : 's'} in a row
-          </span>
-        </div>
-        <div style={{ fontSize: 11, color: hot ? 'rgba(255,255,255,0.85)' : 'var(--color-text-muted)', marginTop: 2 }}>
-          {current > 0
-            ? (current >= best ? "That's your best run yet — keep it alive!" : `Best streak: ${best}`)
-            : `Complete your next session to start a new streak · Best: ${best}`}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function PlanWeekCTA({ onPlanWeek }) {
   return (
     <div className="card" style={{ background: 'var(--grad-hero)', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
@@ -469,7 +433,6 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
       <CatchUpCard unconfirmed={unconfirmed} onToggle={onToggle} onBail={onBail} onRPE={onRPE} />
       <AdaptationBanner adaptation={adaptation} />
       <TodayCard plan={plan} sessionState={sessionState} planStart={planStart} onToggle={onToggle} onBail={onBail} />
-      <StreakCard streak={streak} />
       <StravaCard strava={strava} />
 
       <div className="stats-grid">
