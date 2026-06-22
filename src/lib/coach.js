@@ -88,7 +88,6 @@ export function targetZoneMinutes(session) {
 function dominantZone(min) {
   return Object.keys(min).reduce((a, b) => (min[b] > min[a] ? b : a), 'z1')
 }
-const cap = s => s.charAt(0).toUpperCase() + s.slice(1)
 const r = m => Math.round(m)
 
 // Per-ride coaching. Returns { tone, title, msg, tiz } or null when there's no
@@ -106,12 +105,12 @@ export function analyzeRide(activity, session, ftp) {
     const target = targetZoneMinutes(session)
     if (inZone >= target * 0.7) {
       return { tone: 'praise', tiz,
-        title: `Strong ${ZONE_LABEL[tz]} work`,
-        msg: `${r(inZone)} min in ${tz.toUpperCase()} across ${efforts.count} effort${efforts.count === 1 ? '' : 's'} — that's the session. 🔥` }
+        title: 'Target hit',
+        msg: `${r(inZone)} min in ${tz.toUpperCase()} across ${efforts.count} effort${efforts.count === 1 ? '' : 's'}. Repeat this structure on ${ZONE_LABEL[tz]} days.` }
     }
     return { tone: 'nudge', tiz,
-      title: `${cap(ZONE_LABEL[tz])} day came out ${ZONE_LABEL[dom]}`,
-      msg: `Nice time on the bike — but only ${r(inZone)} of ~${target} min landed in ${tz.toUpperCase()}${efforts.count ? '' : ', and no clear efforts showed up'}. Next ${ZONE_LABEL[tz]} day, give it shape: ${PRESCRIPTION[tz]}.` }
+      title: 'Short on target zone',
+      msg: `${r(inZone)} of ~${target} min in ${tz.toUpperCase()}${efforts.count ? '' : '; no efforts detected'}. Next ${ZONE_LABEL[tz]} day, ride ${PRESCRIPTION[tz]}.` }
   }
 
   // Easy day ridden too hard.
@@ -120,19 +119,19 @@ export function analyzeRide(activity, session, ftp) {
     if (hardMin > tiz.totalMin * 0.25) {
       return { tone: 'nudge', tiz,
         title: 'Easy day ran hot',
-        msg: `${r(hardMin)} min crept into Z3+ on what was meant to be an easy ${ZONE_LABEL[session.zone]} ride. Keeping easy days truly easy is what lets the hard ones land.` }
+        msg: `${r(hardMin)} min in Z3+ on an easy ${ZONE_LABEL[session.zone]} ride. Hold easy days below 75% FTP.` }
     }
     return { tone: 'praise', tiz,
-      title: 'Well-controlled endurance',
-      msg: `${r(tiz.min.z1 + tiz.min.z2)} min aerobic, stayed out of the red — textbook ${ZONE_LABEL[session.zone]}. 👌` }
+      title: 'Endurance on target',
+      msg: `${r(tiz.min.z1 + tiz.min.z2)} min aerobic, none in the red. Keep ${ZONE_LABEL[session.zone]} days here.` }
   }
 
   // Free ride, nothing prescribed.
-  const coast = tiz.coastingPct > 0.25 ? ` Heads-up: ~${r(tiz.coastingPct * 100)}% coasting, so a fair bit was freewheeling.` : ''
+  const coast = tiz.coastingPct > 0.25 ? ` ${r(tiz.coastingPct * 100)}% coasting — pedal through descents to hold steady load.` : ''
   const msg = (dom === 'z1' || dom === 'z2')
-    ? `Mostly ${ZONE_LABEL[dom]} — solid aerobic time.${coast}`
-    : `A good chunk in ${ZONE_LABEL[dom]}.${efforts.count ? ` ${efforts.count} effort${efforts.count === 1 ? '' : 's'} in there — nice.` : ' Felt unstructured — pick a target next time and it’ll count for more.'}`
-  return { tone: 'note', tiz, title: `${r(tiz.totalMin)} min ride logged`, msg }
+    ? `${r(tiz.totalMin)} min, mostly ${ZONE_LABEL[dom]}.${coast}`
+    : `${r(tiz.totalMin)} min in mostly ${ZONE_LABEL[dom]}.${efforts.count ? ` ${efforts.count} effort${efforts.count === 1 ? '' : 's'} detected.` : ' Set a target zone before each ride.'}`
+  return { tone: 'note', tiz, title: 'Ride logged', msg }
 }
 
 // ── Weekly coach ─────────────────────────────────────────────
@@ -174,12 +173,12 @@ export function analyzeWeek(weekItems, ftp, now = new Date()) {
 
   if (!focus) {
     return { tone: 'praise', title: 'Intensity on track', bars,
-      msg: `You're hitting your hard-zone targets this week. Keep the easy days easy and let it build.` }
+      msg: `Hard-zone targets met this week. Keep easy days easy.` }
   }
   const left = remaining[focus.zone]
   const closer = left
-    ? ` ${left} ${ZONE_LABEL[focus.zone]} session${left === 1 ? '' : 's'} still on the calendar — that's where you close it.`
-    : ` No ${ZONE_LABEL[focus.zone]} sessions left this week, so bank it in the next one.`
-  return { tone: 'nudge', title: `Down on ${focus.zone.toUpperCase()} this week`, bars,
-    msg: `About ${r(focus.deficit)} min under your ${ZONE_LABEL[focus.zone]} target so far.${closer}` }
+    ? ` ${left} ${ZONE_LABEL[focus.zone]} session${left === 1 ? '' : 's'} remain this week — use them.`
+    : ` No ${ZONE_LABEL[focus.zone]} sessions remain this week. Bank it in the next.`
+  return { tone: 'nudge', title: `Down on ${focus.zone.toUpperCase()}`, bars,
+    msg: `${r(focus.deficit)} min under the ${ZONE_LABEL[focus.zone]} target.${closer}` }
 }

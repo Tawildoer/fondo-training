@@ -36,13 +36,21 @@ function ZoneStrip({ min, totalMin }) {
   )
 }
 
-function CoachShell({ tone, title, msg, children }) {
+function CoachShell({ tone, title, msg, theme = 'tone', children }) {
   const t = TONE[tone] || TONE.note
+  // 'site' theme keeps the weekly coach on the electric palette (surface +
+  // brand-blue / violet accents) instead of the green/amber pastel.
+  const site = theme === 'site'
+  const accent = tone === 'nudge' ? 'var(--color-violet)' : 'var(--color-accent)'
+  const wrap = site
+    ? { background: 'var(--color-surface2)', borderLeft: `3px solid ${tone === 'nudge' ? 'var(--color-electric)' : 'var(--color-accent)'}` }
+    : { background: t.bg }
+  const headColor = site ? accent : t.color
   return (
-    <div style={{ background: t.bg, borderRadius: 'var(--radius-sm)', padding: '11px 13px', marginBottom: 4 }}>
+    <div style={{ ...wrap, borderRadius: 'var(--radius-sm)', padding: '11px 13px', marginBottom: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-        <i className={`ti ${t.icon}`} style={{ fontSize: 15, color: t.color }} aria-hidden="true" />
-        <span style={{ fontSize: 12, fontWeight: 700, color: t.color }}>Coach</span>
+        <i className={`ti ${t.icon}`} style={{ fontSize: 15, color: headColor }} aria-hidden="true" />
+        <span style={{ fontSize: 12, fontWeight: 700, color: headColor }}>Coach</span>
         <span style={{ fontSize: 12, fontWeight: 700 }}>· {title}</span>
       </div>
       <p style={{ fontSize: 12.5, lineHeight: 1.45, color: 'var(--color-text)' }}>{msg}</p>
@@ -94,7 +102,7 @@ export function WeekCoach({ weekItems, ftp }) {
   return (
     <div className="card">
       <h2>Coach · this week</h2>
-      <CoachShell tone={a.tone} title={a.title} msg={a.msg}>
+      <CoachShell tone={a.tone} title={a.title} msg={a.msg} theme="site">
         {a.bars?.length > 0 && <WeekBars bars={a.bars} />}
       </CoachShell>
     </div>
