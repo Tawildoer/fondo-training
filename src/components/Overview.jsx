@@ -3,6 +3,8 @@ import { getTodaySessions, getScheduledSessions, parseLocalDate } from '../lib/s
 import { RPE_LABELS } from '../lib/planGenerator'
 import { computeTrainingLoad, parseLeadingMinutes } from '../lib/trainingLoad'
 import { projectLoad } from '../lib/weeklyPlanner'
+import { matchActivityToDate } from '../lib/strava'
+import { WeekCoach } from './Coach'
 
 // Monday 00:00 → Sunday 23:59 of the week containing `now`.
 function thisWeekRange(now = new Date()) {
@@ -440,6 +442,12 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
   const doneHrs = Math.round(weekSessions.filter(isDone).reduce((a, s) => a + parseLeadingMinutes(s.session.desc), 0) / 60 * 10) / 10
   const weekPct = plannedThisWeek ? Math.round((doneThisWeek / plannedThisWeek) * 100) : 0
 
+  // Pair each of this week's sessions with the ride that landed on its day, so
+  // the coach can weigh prescribed-vs-actual hard-zone minutes.
+  const weekItems = weekSessions.map(s => ({
+    session: s.session, date: s.date, activity: matchActivityToDate(activities, s.date),
+  }))
+
   const projection = useMemo(() => projectLoad({
     currentCtl: loadCtx?.currentCtl || 0,
     recentWeeklyTss: loadCtx?.recentWeeklyTss || 0,
@@ -471,6 +479,8 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
           <div className="progress-fill" style={{ width: `${weekPct}%` }} />
         </div>
       </div>
+
+      <WeekCoach weekItems={weekItems} ftp={user.ftp} />
 
       <ProjectionChart series={projection} events={events} />
 
