@@ -74,7 +74,8 @@ export function LastRideCoach({ activity, session, ftp }) {
   )
 }
 
-// Prescribed-vs-actual mini bars for the week's hard zones.
+// Actual-vs-target mini bars for the week's hard zones. The target marker +
+// "/ target" only appear when there's actually a planned target for the zone.
 function WeekBars({ bars }) {
   const peak = Math.max(1, ...bars.map(b => Math.max(b.prescribed, b.actual)))
   return (
@@ -85,18 +86,16 @@ function WeekBars({ bars }) {
           <div style={{ flex: 1, position: 'relative', height: 14, borderRadius: 7, background: 'var(--color-surface)', border: '0.5px solid var(--color-border)', overflow: 'hidden' }}>
             {/* actual fill */}
             <div style={{ width: `${Math.min(100, (b.actual / peak) * 100)}%`, height: '100%', borderRadius: 7, background: `var(--zone-${b.zone}-bg)` }} />
-            {/* prescribed target marker — full-height, high-contrast line */}
-            <div style={{ position: 'absolute', left: `${(b.prescribed / peak) * 100}%`, top: 0, bottom: 0, width: 3, marginLeft: -1.5, background: 'var(--color-text)', borderRadius: 2 }} title={`Target ${b.prescribed} min`} />
+            {/* target marker — only when a target exists */}
+            {b.prescribed > 0 && (
+              <div style={{ position: 'absolute', left: `${(b.prescribed / peak) * 100}%`, top: 0, bottom: 0, width: 3, marginLeft: -1.5, background: 'var(--color-text)', borderRadius: 2 }} title={`Target ${b.prescribed} min`} />
+            )}
           </div>
           <span style={{ width: 82, textAlign: 'right', color: 'var(--color-text-muted)' }}>
-            <strong style={{ color: 'var(--color-text)', fontSize: 12 }}>{b.actual}</strong> / {b.prescribed} min
+            <strong style={{ color: 'var(--color-text)', fontSize: 12 }}>{b.actual}</strong>{b.prescribed > 0 ? ` / ${b.prescribed}` : ''} min
           </span>
         </div>
       ))}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--color-text-muted)' }}>
-        <span style={{ width: 3, height: 11, background: 'var(--color-text)', borderRadius: 2, display: 'inline-block' }} />
-        Target · bar = done
-      </div>
     </div>
   )
 }

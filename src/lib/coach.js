@@ -157,17 +157,26 @@ export function analyzeRolling7(planned, rides, ftp) {
   const bars = ['z3', 'z4', 'z5'].filter(z => prescribed[z] > 0 || actual[z] >= 5)
     .map(z => ({ zone: z, prescribed: r(prescribed[z]), actual: r(actual[z]) }))
 
+  // No intensity was on the plan, but some hard riding happened anyway — there's
+  // no target to compare against, so suggest building structure instead.
+  if (totalPrescribed < 5) {
+    let topZ = 'z4', topV = -1
+    for (const z of ['z3', 'z4', 'z5']) if (actual[z] > topV) { topV = actual[z]; topZ = z }
+    return { tone: 'note', title: 'No hard work planned', bars,
+      msg: `Your plan held no intensity over the last 7 days, but you logged ${r(totalActual)} min in Z3+ (mostly ${ZONE_LABEL[topZ]}). Add structured hard sessions if you're building toward something.` }
+  }
+
   // Biggest shortfall (under-delivering the hard work), hardest zone winning ties.
   let deficit = null
   for (const z of ['z5', 'z4', 'z3']) {
     const gap = prescribed[z] - actual[z]
     if (prescribed[z] > 0 && gap > 10 && (!deficit || gap > deficit.gap)) deficit = { zone: z, gap }
   }
-  // Overcooking the hard zones (well over plan) — a fatigue flag.
+  // Overcooking a planned hard zone (well over its target) — a fatigue flag.
   let surplus = null
   for (const z of ['z5', 'z4']) {
     const over = actual[z] - prescribed[z]
-    if (over > 15 && (!surplus || over > surplus.over)) surplus = { zone: z, over }
+    if (prescribed[z] > 0 && over > 15 && (!surplus || over > surplus.over)) surplus = { zone: z, over }
   }
 
   if (deficit) {
