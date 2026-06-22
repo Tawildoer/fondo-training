@@ -391,11 +391,13 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
   const plannedHrs = Math.round(weekSessions.reduce((a, s) => a + parseLeadingMinutes(s.session.desc), 0) / 60 * 10) / 10
   const doneHrs = Math.round(weekSessions.filter(isDone).reduce((a, s) => a + parseLeadingMinutes(s.session.desc), 0) / 60 * 10) / 10
 
-  // Progress bar counts the whole week including rest days, which auto-complete
-  // (resting on a rest day *is* sticking to the plan).
+  // Progress bar counts the whole week including rest days. A rest day
+  // auto-completes once it's reached (resting on a rest day *is* sticking to the
+  // plan) — but a rest day still in the future doesn't count yet.
+  const today0 = new Date(); today0.setHours(0, 0, 0, 0)
   const weekAll = getScheduledSessions(plan, { includeRest: true, base: planStart })
     .filter(s => s.date >= wkStart && s.date <= wkEnd)
-  const isComplete = s => s.session.zone === 'rest' || isDone(s)
+  const isComplete = s => (s.session.zone === 'rest' ? s.date <= today0 : isDone(s))
   const barPlanned = weekAll.length
   const weekPct = barPlanned ? Math.round((weekAll.filter(isComplete).length / barPlanned) * 100) : 0
 
