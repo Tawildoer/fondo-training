@@ -59,12 +59,14 @@ function CoachShell({ tone, title, msg, theme = 'tone', children }) {
   )
 }
 
-// Per-ride card, rendered inside ActivityDetail.
-export function RideCoach({ activity, session, ftp }) {
+// Coach card for the most recent ride — surfaced on the Overview as a
+// forward-looking reminder, not embedded in the workout list.
+export function LastRideCoach({ activity, session, ftp }) {
   const a = analyzeRide(activity, session, ftp)
   if (!a) return null
   return (
-    <div style={{ marginBottom: 10 }}>
+    <div className="card">
+      <h2>Coach · last ride</h2>
       <CoachShell tone={a.tone} title={a.title} msg={a.msg} theme="site">
         <ZoneStrip min={a.tiz.min} totalMin={a.tiz.totalMin} />
       </CoachShell>

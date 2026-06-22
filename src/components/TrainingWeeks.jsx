@@ -156,11 +156,6 @@ function ProgressRing({ done, total }) {
 export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, realCurrentWeek = 1, user, onToggle, onBail, onRPE, onNote, onEditSession }) {
   // Newest/upcoming week first so the most relevant data is at the top.
   const orderedWeeks = [...plan].sort((a, b) => b.num - a.num)
-  // Coach insight only on the most recent ride — a single reminder pointed at
-  // the next session, not a verdict on every past ride.
-  const latestRide = activities.length
-    ? activities.reduce((a, b) => (b.start_date > a.start_date ? b : a))
-    : null
   const [openWeeks, setOpenWeeks] = useState(() => new Set([orderedWeeks[0]?.num]))
   const [editKey, setEditKey] = useState(null)
 
@@ -351,7 +346,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                               />
                             )}
 
-                            {matchedActivity && <ActivityDetail activity={matchedActivity} session={session} ftp={user?.ftp} maxHr={user?.max_hr} showCoach={!!latestRide && matchedActivity.strava_id === latestRide.strava_id} />}
+                            {matchedActivity && <ActivityDetail activity={matchedActivity} session={session} ftp={user?.ftp} maxHr={user?.max_hr} />}
                           </div>
                         </div>
                       </div>

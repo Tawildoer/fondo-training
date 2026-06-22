@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react'
-import { getTodaySessions, getScheduledSessions, parseLocalDate } from '../lib/schedule'
+import { getTodaySessions, getScheduledSessions, parseLocalDate, localDateStr } from '../lib/schedule'
 import { RPE_LABELS } from '../lib/planGenerator'
 import { computeTrainingLoad, parseLeadingMinutes } from '../lib/trainingLoad'
 import { projectLoad } from '../lib/weeklyPlanner'
 import { matchActivityToDate } from '../lib/strava'
-import { WeekCoach } from './Coach'
+import { WeekCoach, LastRideCoach } from './Coach'
 
 // Monday 00:00 → Sunday 23:59 of the week containing `now`.
 function thisWeekRange(now = new Date()) {
@@ -448,6 +448,15 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
     session: s.session, date: s.date, activity: matchActivityToDate(activities, s.date),
   }))
 
+  // Most recent ride + the session it landed on — drives the last-ride coach.
+  const latestRide = activities.length
+    ? activities.reduce((a, b) => (b.start_date > a.start_date ? b : a))
+    : null
+  const latestRideSession = latestRide
+    ? (getScheduledSessions(plan, { base: planStart })
+        .find(s => localDateStr(s.date) === latestRide.start_date.slice(0, 10))?.session || null)
+    : null
+
   const projection = useMemo(() => projectLoad({
     currentCtl: loadCtx?.currentCtl || 0,
     recentWeeklyTss: loadCtx?.recentWeeklyTss || 0,
@@ -480,6 +489,7 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
         </div>
       </div>
 
+      {latestRide && <LastRideCoach activity={latestRide} session={latestRideSession} ftp={user.ftp} />}
       <WeekCoach weekItems={weekItems} ftp={user.ftp} />
 
       <ProjectionChart series={projection} events={events} />
