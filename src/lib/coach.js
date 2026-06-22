@@ -134,51 +134,50 @@ export function analyzeRide(activity, session, ftp) {
   return { tone: 'note', tiz, title: 'Ride logged', msg }
 }
 
-// ── Weekly coach ─────────────────────────────────────────────
-// Rolls the week's prescribed-vs-actual hard-zone minutes into one focus
-// message, pointing at sessions still on the calendar that can close a gap.
-// `weekItems`: [{ session, date, activity }]. Returns { tone, title, msg, bars }
-// or null when the week has no real intensity planned.
-export function analyzeWeek(weekItems, ftp, now = new Date()) {
+// ── Rolling 7-day coach ──────────────────────────────────────
+// Reads the *trailing 7 days* of actual riding against what was planned over
+// the same window and suggests a tweak. A rolling window (rather than the
+// calendar week) avoids the Monday reset that made every fresh week look like a
+// deficit, and reflects your true recent training. `planned`: session objects
+// scheduled in the window; `rides`: activities in the window. Returns
+// { tone, title, msg, bars } or null when there's nothing to coach toward.
+export function analyzeRolling7(planned, rides, ftp) {
   const prescribed = { z3: 0, z4: 0, z5: 0 }
   const actual = { z3: 0, z4: 0, z5: 0 }
-  const remaining = { z3: 0, z4: 0, z5: 0 }
-  const today = new Date(now); today.setHours(0, 0, 0, 0)
-
-  weekItems.forEach(({ session, date, activity }) => {
-    if (session && prescribed[session.zone] != null) {
-      prescribed[session.zone] += targetZoneMinutes(session)
-      if (date > today) remaining[session.zone] += 1
-    }
-    if (activity) {
-      const tiz = timeInZone(activity, ftp)
-      if (tiz) ['z3', 'z4', 'z5'].forEach(z => { actual[z] += tiz.min[z] })
-    }
+  ;(planned || []).forEach(s => { if (s && prescribed[s.zone] != null) prescribed[s.zone] += targetZoneMinutes(s) })
+  ;(rides || []).forEach(a => {
+    const tiz = timeInZone(a, ftp)
+    if (tiz) ['z3', 'z4', 'z5'].forEach(z => { actual[z] += tiz.min[z] })
   })
 
   const totalPrescribed = prescribed.z3 + prescribed.z4 + prescribed.z5
-  if (totalPrescribed < 5) return null // no real intensity to coach toward
+  const totalActual = actual.z3 + actual.z4 + actual.z5
+  if (totalPrescribed < 5 && totalActual < 5) return null // nothing to coach toward
 
-  const bars = ['z3', 'z4', 'z5'].filter(z => prescribed[z] > 0)
+  const bars = ['z3', 'z4', 'z5'].filter(z => prescribed[z] > 0 || actual[z] >= 5)
     .map(z => ({ zone: z, prescribed: r(prescribed[z]), actual: r(actual[z]) }))
 
-  // Biggest shortfall, hardest zone winning ties.
-  let focus = null
+  // Biggest shortfall (under-delivering the hard work), hardest zone winning ties.
+  let deficit = null
   for (const z of ['z5', 'z4', 'z3']) {
-    const deficit = prescribed[z] - actual[z]
-    if (prescribed[z] > 0 && deficit > 8 && (!focus || deficit > focus.deficit)) {
-      focus = { zone: z, deficit }
-    }
+    const gap = prescribed[z] - actual[z]
+    if (prescribed[z] > 0 && gap > 10 && (!deficit || gap > deficit.gap)) deficit = { zone: z, gap }
+  }
+  // Overcooking the hard zones (well over plan) — a fatigue flag.
+  let surplus = null
+  for (const z of ['z5', 'z4']) {
+    const over = actual[z] - prescribed[z]
+    if (over > 15 && (!surplus || over > surplus.over)) surplus = { zone: z, over }
   }
 
-  if (!focus) {
-    return { tone: 'praise', title: 'Intensity on track', bars,
-      msg: `Hard-zone targets met this week. Keep easy days easy.` }
+  if (deficit) {
+    return { tone: 'nudge', title: `Down on ${deficit.zone.toUpperCase()}`, bars,
+      msg: `${r(deficit.gap)} min under your ${ZONE_LABEL[deficit.zone]} target over the last 7 days. Add a ${ZONE_LABEL[deficit.zone]} session or protect the next one — don't trade it away.` }
   }
-  const left = remaining[focus.zone]
-  const closer = left
-    ? ` ${left} ${ZONE_LABEL[focus.zone]} session${left === 1 ? '' : 's'} remain this week — use them.`
-    : ` No ${ZONE_LABEL[focus.zone]} sessions remain this week. Bank it in the next.`
-  return { tone: 'nudge', title: `Down on ${focus.zone.toUpperCase()}`, bars,
-    msg: `${r(focus.deficit)} min under the ${ZONE_LABEL[focus.zone]} target.${closer}` }
+  if (surplus) {
+    return { tone: 'nudge', title: `Heavy on ${surplus.zone.toUpperCase()}`, bars,
+      msg: `${r(surplus.over)} min over your ${ZONE_LABEL[surplus.zone]} target over the last 7 days. Ease the next hard day so it absorbs.` }
+  }
+  return { tone: 'praise', title: 'On plan', bars,
+    msg: `Hard-zone work matches your plan over the last 7 days. Hold the rhythm.` }
 }

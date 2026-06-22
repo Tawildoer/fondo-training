@@ -2,7 +2,7 @@
 // Per-ride feedback lives in the activity detail; the weekly roll-up sits on
 // the Overview.
 
-import { analyzeRide, analyzeWeek, ZONE_LABEL } from '../lib/coach'
+import { analyzeRide, analyzeRolling7, ZONE_LABEL } from '../lib/coach'
 
 const TONE = {
   praise: { bg: 'var(--color-green-light)', color: 'var(--color-green-text)', icon: 'ti-trophy' },
@@ -101,13 +101,14 @@ function WeekBars({ bars }) {
   )
 }
 
-// Weekly roll-up card for the Overview. `weekItems`: [{ session, date, activity }].
-export function WeekCoach({ weekItems, ftp }) {
-  const a = analyzeWeek(weekItems, ftp)
+// Rolling 7-day coach card for the Overview. `planned`: sessions in the trailing
+// week; `rides`: activities in the trailing week.
+export function WeekCoach({ planned, rides, ftp }) {
+  const a = analyzeRolling7(planned, rides, ftp)
   if (!a) return null
   return (
     <div className="card wgt-2">
-      <h2>Coach · this week</h2>
+      <h2>Coach · last 7 days</h2>
       <CoachShell tone={a.tone} title={a.title} msg={a.msg} theme="site">
         {a.bars?.length > 0 && <WeekBars bars={a.bars} />}
       </CoachShell>

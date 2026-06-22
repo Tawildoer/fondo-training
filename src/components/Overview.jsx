@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { getTodaySessions, getScheduledSessions, localDateStr } from '../lib/schedule'
 import { RPE_LABELS } from '../lib/planGenerator'
 import { parseLeadingMinutes } from '../lib/trainingLoad'
-import { matchActivityToDate } from '../lib/strava'
 import { WeekCoach, LastRideCoach } from './Coach'
 
 // Monday 00:00 → Sunday 23:59 of the week containing `now`.
@@ -245,11 +244,17 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
   const barPlanned = weekAll.length
   const weekPct = barPlanned ? Math.round((weekAll.filter(isComplete).length / barPlanned) * 100) : 0
 
-  // Pair each of this week's sessions with the ride that landed on its day, so
-  // the coach can weigh prescribed-vs-actual hard-zone minutes.
-  const weekItems = weekSessions.map(s => ({
-    session: s.session, date: s.date, activity: matchActivityToDate(activities, s.date),
-  }))
+  // Trailing 7 days (rolling) feed the coach — a rolling window avoids the
+  // Monday calendar reset and reflects true recent training.
+  const win0 = new Date(today0); win0.setDate(win0.getDate() - 6)
+  const rollingPlanned = getScheduledSessions(plan, { base: planStart })
+    .filter(s => s.date >= win0 && s.date <= today0)
+    .map(s => s.session)
+  const rollingRides = activities.filter(a => {
+    if (!a.start_date) return false
+    const d = new Date(a.start_date.slice(0, 10) + 'T00:00:00')
+    return d >= win0 && d <= today0
+  })
 
   // Most recent ride + the session it landed on — drives the last-ride coach.
   const latestRide = activities.length
@@ -289,7 +294,7 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
       {/* At-a-glance coach nudges; deeper charts live in the Analytics tab. */}
       <div className="ov-cols">
         {latestRide && <LastRideCoach activity={latestRide} session={latestRideSession} ftp={user.ftp} />}
-        <WeekCoach weekItems={weekItems} ftp={user.ftp} />
+        <WeekCoach planned={rollingPlanned} rides={rollingRides} ftp={user.ftp} />
       </div>
     </div>
   )
