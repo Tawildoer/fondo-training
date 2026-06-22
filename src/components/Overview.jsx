@@ -452,12 +452,13 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
         </div>
       </div>
 
-      {latestRide && <LastRideCoach activity={latestRide} session={latestRideSession} ftp={user.ftp} />}
-      <WeekCoach weekItems={weekItems} ftp={user.ftp} />
-
-      <ProjectionChart series={projection} events={events} />
-
-      <TrainingLoadCard plan={plan} sessionState={sessionState} activities={activities} user={user} planStart={planStart} />
+      {/* Desktop packs these into two masonry columns; mobile stays single. */}
+      <div className="ov-cols">
+        {latestRide && <LastRideCoach activity={latestRide} session={latestRideSession} ftp={user.ftp} />}
+        <WeekCoach weekItems={weekItems} ftp={user.ftp} />
+        <ProjectionChart series={projection} events={events} />
+        <TrainingLoadCard plan={plan} sessionState={sessionState} activities={activities} user={user} planStart={planStart} />
+      </div>
     </div>
   )
 }

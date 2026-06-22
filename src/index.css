@@ -107,6 +107,18 @@ img, svg, video, canvas { max-width: 100%; }
   margin: 0 auto;
   padding: 2rem 1.5rem;
 }
+/* Give the desktop UI more room so two-column sections breathe. */
+@media (min-width: 1000px) {
+  .app-shell { max-width: 1120px; }
+}
+
+/* Desktop packs secondary Overview cards into balanced masonry columns,
+   making far denser use of the width. Mobile/tablet stays single-column. */
+.ov-cols > .card { margin-bottom: 1rem; }
+@media (min-width: 760px) {
+  .ov-cols { column-count: 2; column-gap: 1rem; }
+  .ov-cols > * { break-inside: avoid; }
+}
 
 /* ── Hero header ── */
 .hero {
