@@ -7,6 +7,7 @@ import { computeTrainingLoad } from '../lib/trainingLoad'
 import { projectLoad } from '../lib/weeklyPlanner'
 import { parseLocalDate } from '../lib/schedule'
 import PowerZones from './PowerZones'
+import RiderRadar from './RiderRadar'
 
 function ProjectionChart({ series, events }) {
   if (!series || series.length < 2) return null
@@ -176,6 +177,7 @@ export default function Analytics({ user, onUpdateFTP, ftpHistory = [], plan, se
         <TrainingLoadCard plan={plan} sessionState={sessionState} activities={activities} user={user} planStart={planStart} />
         <ProjectionChart series={projection} events={events} />
       </div>
+      <RiderRadar activities={activities} ftp={user?.ftp} ctl={loadCtx?.currentCtl} />
       <PowerZones user={user} onUpdateFTP={onUpdateFTP} ftpHistory={ftpHistory} />
     </div>
   )
