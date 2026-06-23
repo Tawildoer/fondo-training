@@ -256,6 +256,13 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
     return d >= win0 && d <= today0
   })
 
+  // Look-ahead: the next 7 days of the plan, so the coach can point at the
+  // upcoming hard session rather than guessing whether you're building toward
+  // anything.
+  const fwd7 = new Date(today0); fwd7.setDate(fwd7.getDate() + 7)
+  const upcomingPlanned = getScheduledSessions(plan, { base: planStart })
+    .filter(s => s.date > today0 && s.date <= fwd7)
+
   // Most recent ride + the session it landed on — drives the last-ride coach.
   const latestRide = activities.length
     ? activities.reduce((a, b) => (b.start_date > a.start_date ? b : a))
@@ -294,7 +301,7 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
       {/* At-a-glance coach nudges; deeper charts live in the Analytics tab. */}
       <div className="ov-cols">
         {latestRide && <LastRideCoach activity={latestRide} session={latestRideSession} ftp={user.ftp} />}
-        <WeekCoach planned={rollingPlanned} rides={rollingRides} ftp={user.ftp} />
+        <WeekCoach planned={rollingPlanned} rides={rollingRides} upcoming={upcomingPlanned} ftp={user.ftp} />
       </div>
     </div>
   )

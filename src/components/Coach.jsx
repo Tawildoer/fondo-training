@@ -104,8 +104,8 @@ function WeekBars({ bars }) {
 
 // Rolling 7-day coach card for the Overview. `planned`: sessions in the trailing
 // week; `rides`: activities in the trailing week.
-export function WeekCoach({ planned, rides, ftp }) {
-  const a = analyzeRolling7(planned, rides, ftp)
+export function WeekCoach({ planned, rides, upcoming, ftp }) {
+  const a = analyzeRolling7(planned, rides, ftp, upcoming)
   if (!a) return null
   return (
     <div className="card wgt-2" style={{ display: 'flex', flexDirection: 'column' }}>

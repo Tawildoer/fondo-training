@@ -141,7 +141,7 @@ export function analyzeRide(activity, session, ftp) {
 // deficit, and reflects your true recent training. `planned`: session objects
 // scheduled in the window; `rides`: activities in the window. Returns
 // { tone, title, msg, bars } or null when there's nothing to coach toward.
-export function analyzeRolling7(planned, rides, ftp) {
+export function analyzeRolling7(planned, rides, ftp, upcoming = []) {
   const prescribed = { z3: 0, z4: 0, z5: 0 }
   const actual = { z3: 0, z4: 0, z5: 0 }
   ;(planned || []).forEach(s => { if (s && prescribed[s.zone] != null) prescribed[s.zone] += targetZoneMinutes(s) })
@@ -157,13 +157,19 @@ export function analyzeRolling7(planned, rides, ftp) {
   const bars = ['z3', 'z4', 'z5'].filter(z => prescribed[z] > 0 || actual[z] >= 5)
     .map(z => ({ zone: z, prescribed: r(prescribed[z]), actual: r(actual[z]) }))
 
-  // No intensity was on the plan, but some hard riding happened anyway — there's
-  // no target to compare against, so suggest building structure instead.
+  // No intensity in the trailing week. Point at the plan's next hard session
+  // rather than guessing whether the user is building toward something.
   if (totalPrescribed < 5) {
-    let topZ = 'z4', topV = -1
-    for (const z of ['z3', 'z4', 'z5']) if (actual[z] > topV) { topV = actual[z]; topZ = z }
-    return { tone: 'note', title: 'No hard work planned', bars,
-      msg: `Add a structured ${ZONE_LABEL[topZ]} session if you're building toward something.` }
+    const nextHard = (upcoming || []).find(s => ['z3', 'z4', 'z5'].includes(s?.session?.zone))
+    if (nextHard) {
+      const day = nextHard.date instanceof Date
+        ? nextHard.date.toLocaleDateString('en-AU', { weekday: 'long' })
+        : 'soon'
+      return { tone: 'note', title: 'Easy stretch', bars,
+        msg: `Next hard session: ${ZONE_LABEL[nextHard.session.zone]} on ${day}. Stay fresh for it.` }
+    }
+    return { tone: 'note', title: 'Base block', bars,
+      msg: `No intensity in your plan right now — keep building aerobic base.` }
   }
 
   // Biggest shortfall (under-delivering the hard work), hardest zone winning ties.
