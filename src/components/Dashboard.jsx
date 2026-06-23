@@ -216,7 +216,9 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     const sessions = row.sessions.map((s, i) => (i === idx ? updated : s))
     // Reflect the edit immediately; reconcile with the server row when it lands.
     setPlannedWeeks(prev => prev.map(w => (w.week_num === weekNumE ? { ...w, sessions } : w)))
-    const saved = await upsertPlannedWeek(user.id, weekNumE, { sessions })
+    // week_start is NOT NULL with no default — must be sent even on an update,
+    // since Postgres validates the insert tuple before resolving the conflict.
+    const saved = await upsertPlannedWeek(user.id, weekNumE, { sessions, week_start: row.week_start })
     if (saved) setPlannedWeeks(prev => prev.map(w => (w.week_num === weekNumE ? saved : w)))
   }
 
