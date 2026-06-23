@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { RPE_LABELS } from '../lib/planGenerator'
+import { RPE_LABELS, getZoneWatts } from '../lib/planGenerator'
 import { getSessionDate } from '../lib/schedule'
 import { matchActivityToDate } from '../lib/strava'
 import { ZONE_OPTIONS, ZONE_META, buildWorkout } from '../lib/weeklyPlanner'
@@ -63,6 +63,31 @@ function SessionEditor({ session, onChange }) {
           </div>
         )
       })()}
+    </div>
+  )
+}
+
+// Heart-rate zones as a fraction of max HR (Z1…Z5), matching the Analytics tab.
+const HR_ZONE_FACTORS = [[0.50, 0.60], [0.60, 0.72], [0.72, 0.82], [0.82, 0.89], [0.89, 1.00]]
+const ZONE_INDEX = { z1: 0, z2: 1, z3: 2, z4: 3, z5: 4 }
+
+// Concrete power + heart-rate bands to hold on a steady (non-interval) ride, so
+// an expanded Z2 endurance day shows what to actually aim at, not just prose.
+function SteadyTargets({ zone, ftp, maxHr }) {
+  const watts = ftp ? getZoneWatts(zone.toUpperCase(), ftp) : null
+  const hr = HR_ZONE_FACTORS[ZONE_INDEX[zone]]
+  const bpm = maxHr && hr ? `${Math.round(hr[0] * maxHr)}–${Math.round(hr[1] * maxHr)} bpm` : null
+  if (!watts && !bpm) return null
+  const Cell = ({ label, value }) => (
+    <div>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.6 }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, marginTop: 1 }}>{value}</div>
+    </div>
+  )
+  return (
+    <div style={{ marginTop: 10, display: 'flex', gap: 22, flexWrap: 'wrap' }}>
+      {watts && <Cell label="Power" value={`${watts.lo}–${watts.hi} W`} />}
+      {bpm && <Cell label="Heart rate" value={bpm} />}
     </div>
   )
 }
@@ -279,11 +304,13 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
 
                             {detailOpen && (
                               <>
-                                {structured && (
+                                {structured ? (
                                   <div style={{ marginTop: 10 }}>
                                     <IntervalProfile segments={wk.segments} />
                                     <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.9, marginTop: 8 }}>{wk.breakdown}</div>
                                   </div>
+                                ) : (
+                                  <SteadyTargets zone={session.zone} ftp={user?.ftp} maxHr={user?.max_hr} />
                                 )}
 
                                 {!state.completed && (
