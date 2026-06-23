@@ -154,8 +154,19 @@ export function analyzeRolling7(planned, rides, ftp, upcoming = []) {
   const totalActual = actual.z3 + actual.z4 + actual.z5
   if (totalPrescribed < 5 && totalActual < 5) return null // nothing to coach toward
 
-  const bars = ['z3', 'z4', 'z5'].filter(z => prescribed[z] > 0 || actual[z] >= 5)
-    .map(z => ({ zone: z, prescribed: r(prescribed[z]), actual: r(actual[z]) }))
+  // Hard-zone minutes the *upcoming* 7 days prescribe. Used as the bar target
+  // when the trailing window was easy, so each bar always shows a goal to aim
+  // at (what the plan has you building toward), not just logged time.
+  const prescribedFwd = { z3: 0, z4: 0, z5: 0 }
+  ;(upcoming || []).forEach(s => {
+    const z = s?.session?.zone
+    if (prescribedFwd[z] != null) prescribedFwd[z] += targetZoneMinutes(s.session)
+  })
+  const goal = {}
+  ;['z3', 'z4', 'z5'].forEach(z => { goal[z] = prescribed[z] > 0 ? prescribed[z] : prescribedFwd[z] })
+
+  const bars = ['z3', 'z4', 'z5'].filter(z => goal[z] > 0 || actual[z] >= 5)
+    .map(z => ({ zone: z, prescribed: r(goal[z]), actual: r(actual[z]) }))
 
   // No intensity in the trailing week. Point at the plan's next hard session
   // rather than guessing whether the user is building toward something.
