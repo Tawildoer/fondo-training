@@ -93,8 +93,8 @@ function WeekBars({ bars }) {
               <div style={{ position: 'absolute', left: `${(b.prescribed / peak) * 100}%`, top: 0, bottom: 0, width: 3, marginLeft: -1.5, background: 'var(--color-text)', borderRadius: 2 }} title={`Target ${b.prescribed} min`} />
             )}
           </div>
-          <span style={{ width: 82, textAlign: 'right', color: 'var(--color-text-muted)' }}>
-            <strong style={{ color: 'var(--color-text)', fontSize: 12 }}>{b.actual}</strong>{b.prescribed > 0 ? ` / ${b.prescribed}` : ''} min
+          <span style={{ width: 92, textAlign: 'right', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
+            <strong style={{ color: 'var(--color-text)', fontSize: 12 }}>{b.actual}min</strong>{b.prescribed > 0 ? ` / ${b.prescribed}min` : ''}
           </span>
         </div>
       ))}
