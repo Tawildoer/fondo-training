@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { RPE_LABELS } from '../lib/planGenerator'
 import { getSessionDate } from '../lib/schedule'
 import { matchActivityToDate } from '../lib/strava'
-import { ZONE_OPTIONS, ZONE_META } from '../lib/weeklyPlanner'
+import { ZONE_OPTIONS, ZONE_META, buildWorkout } from '../lib/weeklyPlanner'
 import ActivityDetail from './ActivityDetail'
 
 const fmtMin = m => (m >= 90 ? `${Math.round(m / 30) * 30 / 60} hr` : `${m} min`)
@@ -67,66 +67,28 @@ function SessionEditor({ session, onChange }) {
   )
 }
 
-function NotesField({ note, onSave }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(note || '')
-
-  useEffect(() => { setDraft(note || '') }, [note])
-
-  function save() {
-    setEditing(false)
-    const trimmed = draft.trim()
-    if (trimmed !== (note || '')) onSave(trimmed)
-  }
-
-  if (editing) {
-    return (
-      <textarea
-        autoFocus
-        value={draft}
-        onChange={e => setDraft(e.target.value)}
-        onBlur={save}
-        placeholder="How did it go? Anything to remember…"
-        rows={2}
-        style={{
-          width: '100%', marginTop: 8, padding: '7px 10px', fontSize: 12,
-          fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical',
-          border: '0.5px solid var(--color-border-strong)', borderRadius: 'var(--radius-sm)',
-          background: 'var(--color-surface)', color: 'var(--color-text)', outline: 'none',
-        }}
-      />
-    )
-  }
-
-  if (note) {
-    return (
-      <button
-        onClick={() => setEditing(true)}
-        style={{
-          marginTop: 8, display: 'flex', gap: 7, alignItems: 'flex-start', width: '100%',
-          textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
-          background: 'rgba(0,0,0,0.04)', border: 'none', borderRadius: 'var(--radius-sm)',
-          padding: '7px 10px', fontSize: 12, lineHeight: 1.5, color: 'inherit',
-        }}
-      >
-        <i className="ti ti-note" style={{ fontSize: 13, opacity: 0.6, flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
-        <span style={{ opacity: 0.9 }}>{note}</span>
-      </button>
-    )
-  }
-
+// Interval profile: a silhouette of the session's efforts. Bars are drawn in
+// the card's own text colour (the row is already tinted by zone), with width ∝
+// duration and height ∝ intensity, so the shape of the workout reads at a glance.
+function IntervalProfile({ segments }) {
+  const OPACITY = { warmup: 0.30, work: 0.92, recover: 0.20, cooldown: 0.28, steady: 0.55 }
   return (
-    <button
-      onClick={() => setEditing(true)}
-      style={{
-        marginTop: 8, display: 'inline-flex', gap: 5, alignItems: 'center',
-        cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
-        padding: 0, fontSize: 11, fontWeight: 600, color: 'inherit', opacity: 0.55,
-        textTransform: 'uppercase', letterSpacing: '0.05em',
-      }}
-    >
-      <i className="ti ti-pencil-plus" style={{ fontSize: 13 }} aria-hidden="true" /> Add note
-    </button>
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 54, marginTop: 4 }}>
+      {segments.map((seg, i) => {
+        const h = Math.round(Math.min(1, Math.max(0.16, seg.pct / 1.2)) * 100)
+        return (
+          <div
+            key={i}
+            title={`${seg.kind} · ${seg.min} min`}
+            style={{
+              flexGrow: Math.max(0.5, seg.min), flexBasis: 0, minWidth: 2,
+              height: `${h}%`, borderRadius: 2,
+              background: 'currentColor', opacity: OPACITY[seg.kind] ?? 0.5,
+            }}
+          />
+        )
+      })}
+    </div>
   )
 }
 
@@ -161,6 +123,16 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
     : null
   const [openWeeks, setOpenWeeks] = useState(() => new Set([orderedWeeks[0]?.num]))
   const [editKey, setEditKey] = useState(null)
+  const [openDetails, setOpenDetails] = useState(() => new Set())
+
+  function toggleDetail(key) {
+    setOpenDetails(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   function toggleWeek(num) {
     setOpenWeeks(prev => {
@@ -288,7 +260,39 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                 </span>
                               )}
                             </div>
-                            <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{session.desc}</div>
+                            {(() => {
+                              const structured = !isRest && ['z3', 'z4', 'z5'].includes(session.zone) && session.durationMin != null
+                              if (!structured) {
+                                return <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{session.desc}</div>
+                              }
+                              const wk = buildWorkout(session.zone, session.durationMin, user?.ftp)
+                              const detailOpen = openDetails.has(key)
+                              return (
+                                <>
+                                  <button
+                                    onClick={() => toggleDetail(key)}
+                                    aria-expanded={detailOpen}
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer',
+                                      fontFamily: 'inherit', background: 'none', border: 'none', padding: 0,
+                                      color: 'inherit', textAlign: 'left',
+                                    }}
+                                  >
+                                    <span style={{ fontSize: 13, fontWeight: 700 }}>{wk.summary}</span>
+                                    <span style={{ fontSize: 12, opacity: 0.8 }}>· {wk.target}</span>
+                                    <i className={`ti ${detailOpen ? 'ti-chevron-up' : 'ti-chevron-down'}`}
+                                      style={{ fontSize: 14, opacity: 0.7 }} aria-hidden="true" />
+                                  </button>
+                                  {detailOpen && (
+                                    <div style={{ marginTop: 6 }}>
+                                      <IntervalProfile segments={wk.segments} />
+                                      <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.9, marginTop: 8 }}>{wk.breakdown}</div>
+                                      <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.8, marginTop: 4 }}>{session.desc}</div>
+                                    </div>
+                                  )}
+                                </>
+                              )
+                            })()}
 
                             {!isRest && !state.completed && (
                               <button
@@ -351,13 +355,6 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                   </span>
                                 )}
                               </div>
-                            )}
-
-                            {!isRest && (
-                              <NotesField
-                                note={state.notes}
-                                onSave={text => onNote(week.num, idx, text, session.zone)}
-                              />
                             )}
 
                             {matchedActivity && <ActivityDetail activity={matchedActivity} session={session} ftp={user?.ftp} maxHr={user?.max_hr} />}

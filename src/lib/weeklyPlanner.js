@@ -195,10 +195,59 @@ function describe(zone, min, ftp, isLong) {
     case 'z2': return isLong
       ? `${dur} steady endurance at ${zl}. Fuel every 30 min — long-ride practice.`
       : `${dur} steady at ${zl}. Controlled aerobic effort, no drifting up.`
-    case 'z3': return `${dur} with sweet-spot blocks at ${zl}. Smooth, sustained power.`
-    case 'z4': return `${dur} of threshold work at ${zl}. The key quality session — full recoveries between efforts.`
-    case 'z5': return `${dur} with VO₂ intervals at ${zl}. Short, hard, full recoveries. Sharpening top end.`
+    case 'z3':
+    case 'z4':
+    case 'z5': {
+      const wk = buildWorkout(zone, min, ftp)
+      const tail = { z3: 'Smooth, sustained power.', z4: 'Full recoveries between efforts — the key quality session.', z5: 'Short and hard. Sharpen the top end.' }[zone]
+      return `${wk.summary} at ${zl}, ${wk.offMin} min easy between. ${tail}`
+    }
     default: return `${dur}.`
+  }
+}
+
+// ── Interval structure ───────────────────────────────────────
+// Turns a zone + duration into a concrete interval prescription (e.g. "4 × 12
+// min") plus a segment-by-segment profile for the card's visual. Derived
+// deterministically so it works for any session that carries a zone + minutes,
+// including ones saved before this existed.
+const WORKOUT_SCHEME = {
+  z3: { on: 15, off: 5, pct: 0.90, label: 'sweet spot' },
+  z4: { on: 12, off: 5, pct: 1.00, label: 'threshold' },
+  z5: { on: 4,  off: 3, pct: 1.15, label: 'VO₂' },
+}
+const STEADY_PCT = { z1: 0.50, z2: 0.65 }
+
+export function buildWorkout(zone, totalMin, ftp) {
+  const total = Math.max(20, Math.round(totalMin || 60))
+  const target = ftp ? getZoneLabel(zone.toUpperCase(), ftp) : zone.toUpperCase()
+
+  // Steady rides: one flat block, no interval breakdown.
+  if (!WORKOUT_SCHEME[zone]) {
+    return { steady: true, summary: `${fmtDur(total)} steady`, target, total,
+      segments: [{ kind: 'steady', min: total, pct: STEADY_PCT[zone] ?? 0.55 }] }
+  }
+
+  const sc = WORKOUT_SCHEME[zone]
+  const warm = total >= 75 ? 15 : 10
+  const cool = 10
+  const budget = Math.max(sc.on, total - warm - cool)
+  const unit = sc.on + sc.off
+  const reps = Math.max(2, Math.floor((budget + sc.off) / unit))
+
+  const segments = [{ kind: 'warmup', min: warm, pct: 0.60 }]
+  for (let i = 0; i < reps; i++) {
+    segments.push({ kind: 'work', min: sc.on, pct: sc.pct })
+    if (i < reps - 1) segments.push({ kind: 'recover', min: sc.off, pct: 0.45 })
+  }
+  segments.push({ kind: 'cooldown', min: cool, pct: 0.40 })
+
+  return {
+    steady: false,
+    summary: `${reps} × ${sc.on} min`,
+    reps, onMin: sc.on, offMin: sc.off, zoneLabel: sc.label, target, total,
+    breakdown: `${warm} min warm-up → ${reps} × (${sc.on} min @ ${target} / ${sc.off} min easy) → ${cool} min cool-down`,
+    segments,
   }
 }
 
