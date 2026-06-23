@@ -220,21 +220,24 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                     const isRest = session.zone === 'rest'
                     const bailed = !!state.bailed && !isRest
                     const matchedActivity = isRest ? null : matchActivityToDate(activities, getSessionDate(week.num, session, idx, planStart))
-                    const structured = !isRest && ['z3', 'z4', 'z5'].includes(session.zone) && session.durationMin != null
+                    // Every non-rest session is a thin card that opens to its
+                    // richer detail; interval sessions also get a workout profile.
+                    const expandable = !isRest
+                    const structured = expandable && ['z3', 'z4', 'z5'].includes(session.zone) && session.durationMin != null
                     const wk = structured ? buildWorkout(session.zone, session.durationMin, user?.ftp) : null
-                    const detailOpen = structured && openDetails.has(key)
+                    const detailOpen = expandable && openDetails.has(key)
                     // The whole card toggles the detail; action controls below
                     // stopPropagation so they don't also expand/collapse.
                     const stop = e => e.stopPropagation()
 
                     return (
                       <div key={idx} className={`sess-${session.zone} sess-row`}
-                        role={structured ? 'button' : undefined}
-                        tabIndex={structured ? 0 : undefined}
-                        aria-expanded={structured ? detailOpen : undefined}
-                        onClick={structured ? () => toggleDetail(key) : undefined}
-                        onKeyDown={structured ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDetail(key) } }) : undefined}
-                        style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px', opacity: bailed ? 0.6 : 1, cursor: structured ? 'pointer' : 'default' }}>
+                        role={expandable ? 'button' : undefined}
+                        tabIndex={expandable ? 0 : undefined}
+                        aria-expanded={expandable ? detailOpen : undefined}
+                        onClick={expandable ? () => toggleDetail(key) : undefined}
+                        onKeyDown={expandable ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDetail(key) } }) : undefined}
+                        style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px', opacity: bailed ? 0.6 : 1, cursor: expandable ? 'pointer' : 'default' }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                           <div style={{ paddingTop: 2, width: 18, flexShrink: 0 }}>
                             {!isRest && (
@@ -272,87 +275,91 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                 </span>
                               )}
                             </div>
-                            {(!structured || !detailOpen) ? (
-                              <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{session.desc}</div>
-                            ) : (
-                              <div>
-                                <IntervalProfile segments={wk.segments} />
-                                <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.9, marginTop: 8 }}>{wk.breakdown}</div>
-                              </div>
-                            )}
+                            <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{session.desc}</div>
 
-                            {!isRest && !state.completed && (
-                              <button
-                                onClick={e => { stop(e); onBail(week.num, idx, session.zone) }}
-                                style={{
-                                  marginTop: 8, marginRight: 14, display: 'inline-flex', gap: 5, alignItems: 'center',
-                                  cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
-                                  padding: 0, fontSize: 11, fontWeight: 600,
-                                  color: 'inherit', opacity: bailed ? 0.55 : 0.85,
-                                  textTransform: 'uppercase', letterSpacing: '0.05em',
-                                }}
-                              >
-                                {bailed
-                                  ? <><i className="ti ti-arrow-back-up" style={{ fontSize: 13 }} aria-hidden="true" /> Un-mark missed</>
-                                  : <><i className="ti ti-circle-x" style={{ fontSize: 13 }} aria-hidden="true" /> Bail</>}
-                              </button>
-                            )}
+                            {detailOpen && (
+                              <>
+                                {structured && (
+                                  <div style={{ marginTop: 10 }}>
+                                    <IntervalProfile segments={wk.segments} />
+                                    <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.9, marginTop: 8 }}>{wk.breakdown}</div>
+                                  </div>
+                                )}
 
-                            {!isRest && onEditSession && (
-                              <button
-                                onClick={e => { stop(e); setEditKey(editKey === `${week.num}_${idx}` ? null : `${week.num}_${idx}`) }}
-                                style={{
-                                  marginTop: 8, display: 'inline-flex', gap: 5, alignItems: 'center',
-                                  cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
-                                  padding: 0, fontSize: 11, fontWeight: 600, color: 'inherit', opacity: 0.7,
-                                  textTransform: 'uppercase', letterSpacing: '0.05em',
-                                }}
-                              >
-                                <i className={`ti ${editKey === `${week.num}_${idx}` ? 'ti-check' : 'ti-pencil'}`} style={{ fontSize: 13 }} aria-hidden="true" />
-                                {editKey === `${week.num}_${idx}` ? ' Done editing' : ' Edit session'}
-                              </button>
-                            )}
-                            {onEditSession && editKey === `${week.num}_${idx}` && (
-                              <div onClick={stop}>
-                                <SessionEditor session={session} onChange={patch => onEditSession(week.num, idx, patch)} />
-                              </div>
-                            )}
-
-                            {state.completed && !isRest && (
-                              <div onClick={stop} style={{ marginTop: 10, paddingTop: 8, borderTop: '0.5px solid rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.65 }}>
-                                  RPE
-                                </span>
-                                {[1, 2, 3, 4, 5].map(r => (
+                                {!state.completed && (
                                   <button
-                                    key={r}
-                                    onClick={() => onRPE(week.num, idx, r, session.zone)}
+                                    onClick={e => { stop(e); onBail(week.num, idx, session.zone) }}
                                     style={{
-                                      padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                                      cursor: 'pointer', fontFamily: 'inherit',
-                                      border: `1.5px solid ${state.rpe === r ? 'var(--color-accent)' : 'var(--color-border-strong)'}`,
-                                      background: state.rpe === r ? 'var(--color-accent)' : 'transparent',
-                                      color: state.rpe === r ? '#fff' : 'inherit',
+                                      marginTop: 8, marginRight: 14, display: 'inline-flex', gap: 5, alignItems: 'center',
+                                      cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
+                                      padding: 0, fontSize: 11, fontWeight: 600,
+                                      color: 'inherit', opacity: bailed ? 0.55 : 0.85,
+                                      textTransform: 'uppercase', letterSpacing: '0.05em',
                                     }}
                                   >
-                                    {r}
+                                    {bailed
+                                      ? <><i className="ti ti-arrow-back-up" style={{ fontSize: 13 }} aria-hidden="true" /> Un-mark missed</>
+                                      : <><i className="ti ti-circle-x" style={{ fontSize: 13 }} aria-hidden="true" /> Bail</>}
                                   </button>
-                                ))}
-                                {state.rpe && (
-                                  <span style={{ fontSize: 11, fontStyle: 'italic', opacity: 0.75 }}>
-                                    {RPE_LABELS[state.rpe]}
-                                  </span>
                                 )}
-                              </div>
-                            )}
 
-                            {matchedActivity && (
-                              <div onClick={stop}>
-                                <ActivityDetail activity={matchedActivity} session={session} ftp={user?.ftp} maxHr={user?.max_hr} />
-                              </div>
+                                {onEditSession && (
+                                  <button
+                                    onClick={e => { stop(e); setEditKey(editKey === `${week.num}_${idx}` ? null : `${week.num}_${idx}`) }}
+                                    style={{
+                                      marginTop: 8, display: 'inline-flex', gap: 5, alignItems: 'center',
+                                      cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
+                                      padding: 0, fontSize: 11, fontWeight: 600, color: 'inherit', opacity: 0.7,
+                                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                                    }}
+                                  >
+                                    <i className={`ti ${editKey === `${week.num}_${idx}` ? 'ti-check' : 'ti-pencil'}`} style={{ fontSize: 13 }} aria-hidden="true" />
+                                    {editKey === `${week.num}_${idx}` ? ' Done editing' : ' Edit session'}
+                                  </button>
+                                )}
+                                {onEditSession && editKey === `${week.num}_${idx}` && (
+                                  <div onClick={stop}>
+                                    <SessionEditor session={session} onChange={patch => onEditSession(week.num, idx, patch)} />
+                                  </div>
+                                )}
+
+                                {state.completed && (
+                                  <div onClick={stop} style={{ marginTop: 10, paddingTop: 8, borderTop: '0.5px solid rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.65 }}>
+                                      RPE
+                                    </span>
+                                    {[1, 2, 3, 4, 5].map(r => (
+                                      <button
+                                        key={r}
+                                        onClick={() => onRPE(week.num, idx, r, session.zone)}
+                                        style={{
+                                          padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                                          cursor: 'pointer', fontFamily: 'inherit',
+                                          border: `1.5px solid ${state.rpe === r ? 'var(--color-accent)' : 'var(--color-border-strong)'}`,
+                                          background: state.rpe === r ? 'var(--color-accent)' : 'transparent',
+                                          color: state.rpe === r ? '#fff' : 'inherit',
+                                        }}
+                                      >
+                                        {r}
+                                      </button>
+                                    ))}
+                                    {state.rpe && (
+                                      <span style={{ fontSize: 11, fontStyle: 'italic', opacity: 0.75 }}>
+                                        {RPE_LABELS[state.rpe]}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+
+                                {matchedActivity && (
+                                  <div onClick={stop}>
+                                    <ActivityDetail activity={matchedActivity} session={session} ftp={user?.ftp} maxHr={user?.max_hr} />
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
-                          {structured && (
+                          {expandable && (
                             <i className={`ti ${detailOpen ? 'ti-chevron-up' : 'ti-chevron-down'}`}
                               style={{ fontSize: 16, opacity: 0.6, flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
                           )}
