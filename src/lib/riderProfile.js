@@ -10,10 +10,10 @@
 // Each ability: a duration (seconds) and the power-to-FTP ratio that scores ~50
 // (balanced) and ~85 (strong). Ordered as they sit around the radar.
 const ABILITIES = [
-  { key: 'sprint',    label: 'Sprint',    sec: 10,   ref50: 2.20, ref85: 2.90, estimate: true },
-  { key: 'anaerobic', label: 'Anaerobic', sec: 60,   ref50: 1.45, ref85: 1.78 },
-  { key: 'vo2',       label: 'VO₂max',    sec: 300,  ref50: 1.15, ref85: 1.32 },
-  { key: 'threshold', label: 'Threshold', sec: 1200, ref50: 1.00, ref85: 1.08, floorFtp: true },
+  { key: 'sprint',    label: 'Sprint',    window: '10s',   sec: 10,   ref50: 2.20, ref85: 2.90, estimate: true },
+  { key: 'anaerobic', label: 'Anaerobic', window: '1 min', sec: 60,   ref50: 1.45, ref85: 1.78 },
+  { key: 'vo2',       label: 'VO₂max',    window: '5 min', sec: 300,  ref50: 1.15, ref85: 1.32 },
+  { key: 'threshold', label: 'Threshold', window: '20 min', sec: 1200, ref50: 1.00, ref85: 1.08, floorFtp: true },
 ]
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
@@ -66,7 +66,7 @@ export function buildRiderProfile(activities, ftp, { ctl = 0 } = {}) {
     const hasData = bestW > 0
     const ratio = hasData ? bestW / ftp : 0
     return {
-      key: a.key, label: a.label, sec: a.sec, estimate: !!a.estimate,
+      key: a.key, label: a.label, window: a.window, sec: a.sec, estimate: !!a.estimate,
       value: r0(bestW), unit: 'W', ratio, hasData,
       score: hasData ? scoreFor(ratio, a) : 0,
     }
@@ -74,7 +74,7 @@ export function buildRiderProfile(activities, ftp, { ctl = 0 } = {}) {
 
   const longest = Math.max(0, ...rides.map(a => a.moving_time_s || 0))
   axes.push({
-    key: 'endurance', label: 'Endurance', value: r0(ctl), unit: 'CTL',
+    key: 'endurance', label: 'Endurance', window: 'aerobic base', value: r0(ctl), unit: 'CTL',
     hasData: (ctl || 0) > 0 || longest > 0, score: enduranceScore(ctl, longest),
   })
 

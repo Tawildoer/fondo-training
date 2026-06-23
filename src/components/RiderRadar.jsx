@@ -67,23 +67,22 @@ export default function RiderRadar({ activities = [], ftp, ctl }) {
         <polygon points={shape} fill="url(#radarFill)" stroke="var(--color-violet)" strokeWidth="2" strokeLinejoin="round" />
         {axes.map((a, i) => {
           const [x, y] = pt(i, n, a.hasData ? a.score : 0)
-          return (
-            <circle key={a.key} cx={x.toFixed(1)} cy={y.toFixed(1)} r="2.6" fill="var(--color-violet)">
-              <title>{`${a.label}: ${a.value}${a.unit === 'W' ? ' W' : ' ' + a.unit} · score ${a.score}`}</title>
-            </circle>
-          )
+          return <circle key={a.key} cx={x.toFixed(1)} cy={y.toFixed(1)} r="2.6" fill="var(--color-violet)" />
         })}
 
-        {/* axis labels */}
+        {/* axis labels — ability name + the time window it measures */}
         {axes.map((a, i) => {
           const [lx, ly] = pt(i, n, 100)
           const dx = lx - CX, dy = ly - CY
           const anchor = Math.abs(dx) < 14 ? 'middle' : dx > 0 ? 'start' : 'end'
-          const ox = CX + dx * 1.16, oy = CY + dy * 1.16
+          const ox = CX + dx * 1.18, oy = CY + dy * 1.18
+          // Stack the window above the name for axes sitting above the centre so
+          // text doesn't overlap the chart; below it otherwise.
+          const above = dy < -8
           return (
-            <text key={a.key} x={ox.toFixed(1)} y={(oy + 3).toFixed(1)} textAnchor={anchor}
-              fontSize="10.5" fontWeight="600" fill="var(--color-text)">
-              {a.label}{a.estimate ? '*' : ''}
+            <text key={a.key} x={ox.toFixed(1)} textAnchor={anchor}>
+              <tspan x={ox.toFixed(1)} y={(oy + (above ? -4 : 2)).toFixed(1)} fontSize="10.5" fontWeight="600" fill="var(--color-text)">{a.label}{a.estimate ? '*' : ''}</tspan>
+              <tspan x={ox.toFixed(1)} y={(oy + (above ? 7 : 13)).toFixed(1)} fontSize="8.5" fill="var(--color-text-muted)">{a.window}</tspan>
             </text>
           )
         })}
