@@ -272,18 +272,12 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                 </span>
                               )}
                             </div>
-                            {!structured ? (
+                            {(!structured || !detailOpen) ? (
                               <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{session.desc}</div>
-                            ) : !detailOpen ? (
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                                <span style={{ fontSize: 13, fontWeight: 700 }}>{wk.summary}</span>
-                                <span style={{ fontSize: 12, opacity: 0.8 }}>· {wk.target}</span>
-                              </div>
                             ) : (
                               <div>
                                 <IntervalProfile segments={wk.segments} />
                                 <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.9, marginTop: 8 }}>{wk.breakdown}</div>
-                                <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.8, marginTop: 4 }}>{session.desc}</div>
                               </div>
                             )}
 

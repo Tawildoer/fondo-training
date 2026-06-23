@@ -195,13 +195,9 @@ function describe(zone, min, ftp, isLong) {
     case 'z2': return isLong
       ? `${dur} steady endurance at ${zl}. Fuel every 30 min — long-ride practice.`
       : `${dur} steady at ${zl}. Controlled aerobic effort, no drifting up.`
-    case 'z3':
-    case 'z4':
-    case 'z5': {
-      const wk = buildWorkout(zone, min, ftp)
-      const tail = { z3: 'Smooth, sustained power.', z4: 'Full recoveries between efforts — the key quality session.', z5: 'Short and hard. Sharpen the top end.' }[zone]
-      return `${wk.summary} at ${zl}, ${wk.offMin} min easy between. ${tail}`
-    }
+    case 'z3': return `${dur} with sweet-spot blocks at ${zl}. Smooth, sustained power.`
+    case 'z4': return `${dur} of threshold work at ${zl}. The key quality session — full recoveries between efforts.`
+    case 'z5': return `${dur} with VO₂ intervals at ${zl}. Short, hard, full recoveries. Sharpening top end.`
     default: return `${dur}.`
   }
 }
