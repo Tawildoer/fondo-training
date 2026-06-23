@@ -268,29 +268,31 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                               const wk = buildWorkout(session.zone, session.durationMin, user?.ftp)
                               const detailOpen = openDetails.has(key)
                               return (
-                                <>
-                                  <button
-                                    onClick={() => toggleDetail(key)}
-                                    aria-expanded={detailOpen}
-                                    style={{
-                                      display: 'inline-flex', alignItems: 'center', gap: 7, cursor: 'pointer',
-                                      fontFamily: 'inherit', background: 'none', border: 'none', padding: 0,
-                                      color: 'inherit', textAlign: 'left',
-                                    }}
-                                  >
-                                    <span style={{ fontSize: 13, fontWeight: 700 }}>{wk.summary}</span>
-                                    <span style={{ fontSize: 12, opacity: 0.8 }}>· {wk.target}</span>
-                                    <i className={`ti ${detailOpen ? 'ti-chevron-up' : 'ti-chevron-down'}`}
-                                      style={{ fontSize: 14, opacity: 0.7 }} aria-hidden="true" />
-                                  </button>
-                                  {detailOpen && (
-                                    <div style={{ marginTop: 6 }}>
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  aria-expanded={detailOpen}
+                                  onClick={() => toggleDetail(key)}
+                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDetail(key) } }}
+                                  style={{ cursor: 'pointer' }}
+                                >
+                                  {!detailOpen ? (
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                                      <span style={{ fontSize: 13, fontWeight: 700 }}>{wk.summary}</span>
+                                      <span style={{ fontSize: 12, opacity: 0.8 }}>· {wk.target}</span>
+                                      <i className="ti ti-chevron-down" style={{ fontSize: 14, opacity: 0.7 }} aria-hidden="true" />
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, fontSize: 11, fontWeight: 600, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                        Collapse <i className="ti ti-chevron-up" style={{ fontSize: 14 }} aria-hidden="true" />
+                                      </div>
                                       <IntervalProfile segments={wk.segments} />
                                       <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.9, marginTop: 8 }}>{wk.breakdown}</div>
                                       <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.8, marginTop: 4 }}>{session.desc}</div>
                                     </div>
                                   )}
-                                </>
+                                </div>
                               )
                             })()}
 
