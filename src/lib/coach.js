@@ -163,7 +163,7 @@ export function analyzeRolling7(planned, rides, ftp) {
     let topZ = 'z4', topV = -1
     for (const z of ['z3', 'z4', 'z5']) if (actual[z] > topV) { topV = actual[z]; topZ = z }
     return { tone: 'note', title: 'No hard work planned', bars,
-      msg: `Your plan held no intensity over the last 7 days, but you logged ${r(totalActual)} min in Z3+ (mostly ${ZONE_LABEL[topZ]}). Add structured hard sessions if you're building toward something.` }
+      msg: `Add a structured ${ZONE_LABEL[topZ]} session if you're building toward something.` }
   }
 
   // Biggest shortfall (under-delivering the hard work), hardest zone winning ties.
@@ -181,12 +181,12 @@ export function analyzeRolling7(planned, rides, ftp) {
 
   if (deficit) {
     return { tone: 'nudge', title: `Down on ${deficit.zone.toUpperCase()}`, bars,
-      msg: `${r(deficit.gap)} min under your ${ZONE_LABEL[deficit.zone]} target over the last 7 days. Add a ${ZONE_LABEL[deficit.zone]} session or protect the next one — don't trade it away.` }
+      msg: `Focus next on ${ZONE_LABEL[deficit.zone]} — ${r(deficit.gap)} min short this week.` }
   }
   if (surplus) {
     return { tone: 'nudge', title: `Heavy on ${surplus.zone.toUpperCase()}`, bars,
-      msg: `${r(surplus.over)} min over your ${ZONE_LABEL[surplus.zone]} target over the last 7 days. Ease the next hard day so it absorbs.` }
+      msg: `Ease off ${ZONE_LABEL[surplus.zone]} — ${r(surplus.over)} min over. Recover first.` }
   }
   return { tone: 'praise', title: 'On plan', bars,
-    msg: `Hard-zone work matches your plan over the last 7 days. Hold the rhythm.` }
+    msg: `On plan — hold the rhythm.` }
 }
