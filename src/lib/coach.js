@@ -138,12 +138,12 @@ export function analyzeRide(activity, session, ftp) {
 // in sweet-spot/threshold; punchy events (crit, road) carry more VO₂. Fractions
 // sum to 1 across z3/z4/z5.
 const EVENT_HARD_MIX = {
-  gran_fondo: { z3: 0.60, z4: 0.30, z5: 0.10 },
-  sportive:   { z3: 0.65, z4: 0.25, z5: 0.10 },
-  time_trial: { z3: 0.35, z4: 0.50, z5: 0.15 },
-  road_race:  { z3: 0.30, z4: 0.40, z5: 0.30 },
-  criterium:  { z3: 0.20, z4: 0.40, z5: 0.40 },
-  other:      { z3: 0.45, z4: 0.35, z5: 0.20 },
+  gran_fondo: { z3: 0.50, z4: 0.30, z5: 0.20 },
+  sportive:   { z3: 0.55, z4: 0.25, z5: 0.20 },
+  time_trial: { z3: 0.25, z4: 0.50, z5: 0.25 },
+  road_race:  { z3: 0.20, z4: 0.40, z5: 0.40 },
+  criterium:  { z3: 0.10, z4: 0.40, z5: 0.50 },
+  other:      { z3: 0.35, z4: 0.35, z5: 0.30 },
 }
 
 // Assumed weekly hard-zone minutes when nothing is prescribed — a fallback so the
