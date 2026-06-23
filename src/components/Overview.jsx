@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getTodaySessions, getScheduledSessions, localDateStr } from '../lib/schedule'
+import { getTodaySessions, getScheduledSessions, localDateStr, nextEvent } from '../lib/schedule'
 import { RPE_LABELS } from '../lib/planGenerator'
 import { parseLeadingMinutes } from '../lib/trainingLoad'
 import { WeekCoach, LastRideCoach } from './Coach'
@@ -263,6 +263,9 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
   const upcomingPlanned = getScheduledSessions(plan, { base: planStart })
     .filter(s => s.date > today0 && s.date <= fwd7)
 
+  // Fallback target inputs for the coach: current fitness + the next event's type.
+  const coachEvent = nextEvent(events)
+
   // Most recent ride + the session it landed on — drives the last-ride coach.
   const latestRide = activities.length
     ? activities.reduce((a, b) => (b.start_date > a.start_date ? b : a))
@@ -301,7 +304,7 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
       {/* At-a-glance coach nudges; deeper charts live in the Analytics tab. */}
       <div className="ov-cols">
         {latestRide && <LastRideCoach activity={latestRide} session={latestRideSession} ftp={user.ftp} />}
-        <WeekCoach planned={rollingPlanned} rides={rollingRides} upcoming={upcomingPlanned} ftp={user.ftp} />
+        <WeekCoach planned={rollingPlanned} rides={rollingRides} upcoming={upcomingPlanned} ctl={loadCtx?.currentCtl} eventType={coachEvent?.event_type} ftp={user.ftp} />
       </div>
     </div>
   )

@@ -134,6 +134,31 @@ export function analyzeRide(activity, session, ftp) {
   return { tone: 'note', tiz, title: 'Ride logged', msg }
 }
 
+// Where a week's hard minutes lean, by event type. Endurance events sit mostly
+// in sweet-spot/threshold; punchy events (crit, road) carry more VO₂. Fractions
+// sum to 1 across z3/z4/z5.
+const EVENT_HARD_MIX = {
+  gran_fondo: { z3: 0.60, z4: 0.30, z5: 0.10 },
+  sportive:   { z3: 0.65, z4: 0.25, z5: 0.10 },
+  time_trial: { z3: 0.35, z4: 0.50, z5: 0.15 },
+  road_race:  { z3: 0.30, z4: 0.40, z5: 0.30 },
+  criterium:  { z3: 0.20, z4: 0.40, z5: 0.40 },
+  other:      { z3: 0.45, z4: 0.35, z5: 0.20 },
+}
+
+// Assumed weekly hard-zone minutes when nothing is prescribed — a fallback so the
+// coach bars always have a goal. Scales total intensity with fitness (CTL ≈ avg
+// daily TSS) and splits it by what the next event demands.
+export function assumedHardTargets(ctl, eventType) {
+  const mix = EVENT_HARD_MIX[eventType] || EVENT_HARD_MIX.other
+  const totalHard = Math.min(140, Math.max(40, Math.round((ctl || 40) * 1.4)))
+  return {
+    z3: Math.round(totalHard * mix.z3),
+    z4: Math.round(totalHard * mix.z4),
+    z5: Math.round(totalHard * mix.z5),
+  }
+}
+
 // ── Rolling 7-day coach ──────────────────────────────────────
 // Reads the *trailing 7 days* of actual riding against what was planned over
 // the same window and suggests a tweak. A rolling window (rather than the
@@ -141,7 +166,7 @@ export function analyzeRide(activity, session, ftp) {
 // deficit, and reflects your true recent training. `planned`: session objects
 // scheduled in the window; `rides`: activities in the window. Returns
 // { tone, title, msg, bars } or null when there's nothing to coach toward.
-export function analyzeRolling7(planned, rides, ftp, upcoming = []) {
+export function analyzeRolling7(planned, rides, ftp, upcoming = [], ctx = {}) {
   const prescribed = { z3: 0, z4: 0, z5: 0 }
   const actual = { z3: 0, z4: 0, z5: 0 }
   ;(planned || []).forEach(s => { if (s && prescribed[s.zone] != null) prescribed[s.zone] += targetZoneMinutes(s) })
@@ -162,8 +187,16 @@ export function analyzeRolling7(planned, rides, ftp, upcoming = []) {
     const z = s?.session?.zone
     if (prescribedFwd[z] != null) prescribedFwd[z] += targetZoneMinutes(s.session)
   })
+  // Fallback: assume targets from fitness + event type when nothing's prescribed
+  // in either window, so every hard zone shows a goal to aim at.
+  const assumed = assumedHardTargets(ctx.ctl, ctx.eventType)
+  let usedAssumed = false
   const goal = {}
-  ;['z3', 'z4', 'z5'].forEach(z => { goal[z] = prescribed[z] > 0 ? prescribed[z] : prescribedFwd[z] })
+  ;['z3', 'z4', 'z5'].forEach(z => {
+    if (prescribed[z] > 0) goal[z] = prescribed[z]
+    else if (prescribedFwd[z] > 0) goal[z] = prescribedFwd[z]
+    else { goal[z] = assumed[z]; usedAssumed = true }
+  })
 
   const bars = ['z3', 'z4', 'z5'].filter(z => goal[z] > 0 || actual[z] >= 5)
     .map(z => ({ zone: z, prescribed: r(goal[z]), actual: r(actual[z]) }))
@@ -176,10 +209,10 @@ export function analyzeRolling7(planned, rides, ftp, upcoming = []) {
       const day = nextHard.date instanceof Date
         ? nextHard.date.toLocaleDateString('en-AU', { weekday: 'long' })
         : 'soon'
-      return { tone: 'note', title: 'Easy stretch', bars,
+      return { tone: 'note', title: 'Easy stretch', bars, assumed: usedAssumed,
         msg: `Next hard session: ${ZONE_LABEL[nextHard.session.zone]} on ${day}. Stay fresh for it.` }
     }
-    return { tone: 'note', title: 'Base block', bars,
+    return { tone: 'note', title: 'Base block', bars, assumed: usedAssumed,
       msg: `No intensity in your plan right now — keep building aerobic base.` }
   }
 
@@ -197,13 +230,13 @@ export function analyzeRolling7(planned, rides, ftp, upcoming = []) {
   }
 
   if (deficit) {
-    return { tone: 'nudge', title: `Down on ${deficit.zone.toUpperCase()}`, bars,
+    return { tone: 'nudge', title: `Down on ${deficit.zone.toUpperCase()}`, bars, assumed: usedAssumed,
       msg: `Focus next on ${ZONE_LABEL[deficit.zone]} — ${r(deficit.gap)} min short this week.` }
   }
   if (surplus) {
-    return { tone: 'nudge', title: `Heavy on ${surplus.zone.toUpperCase()}`, bars,
+    return { tone: 'nudge', title: `Heavy on ${surplus.zone.toUpperCase()}`, bars, assumed: usedAssumed,
       msg: `Ease off ${ZONE_LABEL[surplus.zone]} — ${r(surplus.over)} min over. Recover first.` }
   }
-  return { tone: 'praise', title: 'On plan', bars,
+  return { tone: 'praise', title: 'On plan', bars, assumed: usedAssumed,
     msg: `On plan — hold the rhythm.` }
 }

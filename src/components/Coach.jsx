@@ -78,7 +78,7 @@ export function LastRideCoach({ activity, session, ftp }) {
 
 // Actual-vs-target mini bars for the week's hard zones. The target marker +
 // "/ target" only appear when there's actually a planned target for the zone.
-function WeekBars({ bars }) {
+function WeekBars({ bars, assumed = false }) {
   const peak = Math.max(1, ...bars.map(b => Math.max(b.prescribed, b.actual)))
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 12 }}>
@@ -98,20 +98,25 @@ function WeekBars({ bars }) {
           </span>
         </div>
       ))}
+      {assumed && (
+        <div style={{ fontSize: 10, color: 'var(--color-text-faint)', marginTop: 1 }}>
+          Targets assumed from your fitness + event type
+        </div>
+      )}
     </div>
   )
 }
 
 // Rolling 7-day coach card for the Overview. `planned`: sessions in the trailing
 // week; `rides`: activities in the trailing week.
-export function WeekCoach({ planned, rides, upcoming, ftp }) {
-  const a = analyzeRolling7(planned, rides, ftp, upcoming)
+export function WeekCoach({ planned, rides, upcoming, ctl, eventType, ftp }) {
+  const a = analyzeRolling7(planned, rides, ftp, upcoming, { ctl, eventType })
   if (!a) return null
   return (
     <div className="card wgt-2" style={{ display: 'flex', flexDirection: 'column' }}>
       <h2>Coach · last 7 days</h2>
       <CoachShell tone={a.tone} title={a.title} msg={a.msg} theme="site" fill>
-        {a.bars?.length > 0 && <WeekBars bars={a.bars} />}
+        {a.bars?.length > 0 && <WeekBars bars={a.bars} assumed={a.assumed} />}
       </CoachShell>
     </div>
   )
