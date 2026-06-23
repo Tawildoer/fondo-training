@@ -220,16 +220,28 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                     const isRest = session.zone === 'rest'
                     const bailed = !!state.bailed && !isRest
                     const matchedActivity = isRest ? null : matchActivityToDate(activities, getSessionDate(week.num, session, idx, planStart))
+                    const structured = !isRest && ['z3', 'z4', 'z5'].includes(session.zone) && session.durationMin != null
+                    const wk = structured ? buildWorkout(session.zone, session.durationMin, user?.ftp) : null
+                    const detailOpen = structured && openDetails.has(key)
+                    // The whole card toggles the detail; action controls below
+                    // stopPropagation so they don't also expand/collapse.
+                    const stop = e => e.stopPropagation()
 
                     return (
                       <div key={idx} className={`sess-${session.zone} sess-row`}
-                        style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px', opacity: bailed ? 0.6 : 1 }}>
+                        role={structured ? 'button' : undefined}
+                        tabIndex={structured ? 0 : undefined}
+                        aria-expanded={structured ? detailOpen : undefined}
+                        onClick={structured ? () => toggleDetail(key) : undefined}
+                        onKeyDown={structured ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDetail(key) } }) : undefined}
+                        style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px', opacity: bailed ? 0.6 : 1, cursor: structured ? 'pointer' : 'default' }}>
                         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                           <div style={{ paddingTop: 2, width: 18, flexShrink: 0 }}>
                             {!isRest && (
                               <input
                                 type="checkbox"
                                 checked={!!state.completed}
+                                onClick={stop}
                                 onChange={() => onToggle(week.num, idx, session.zone)}
                                 style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-accent)' }}
                               />
@@ -260,45 +272,24 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                 </span>
                               )}
                             </div>
-                            {(() => {
-                              const structured = !isRest && ['z3', 'z4', 'z5'].includes(session.zone) && session.durationMin != null
-                              if (!structured) {
-                                return <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{session.desc}</div>
-                              }
-                              const wk = buildWorkout(session.zone, session.durationMin, user?.ftp)
-                              const detailOpen = openDetails.has(key)
-                              return (
-                                <div
-                                  role="button"
-                                  tabIndex={0}
-                                  aria-expanded={detailOpen}
-                                  onClick={() => toggleDetail(key)}
-                                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDetail(key) } }}
-                                  style={{ cursor: 'pointer' }}
-                                >
-                                  {!detailOpen ? (
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-                                      <span style={{ fontSize: 13, fontWeight: 700 }}>{wk.summary}</span>
-                                      <span style={{ fontSize: 12, opacity: 0.8 }}>· {wk.target}</span>
-                                      <i className="ti ti-chevron-down" style={{ fontSize: 14, opacity: 0.7 }} aria-hidden="true" />
-                                    </div>
-                                  ) : (
-                                    <div>
-                                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, fontSize: 11, fontWeight: 600, opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                        Collapse <i className="ti ti-chevron-up" style={{ fontSize: 14 }} aria-hidden="true" />
-                                      </div>
-                                      <IntervalProfile segments={wk.segments} />
-                                      <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.9, marginTop: 8 }}>{wk.breakdown}</div>
-                                      <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.8, marginTop: 4 }}>{session.desc}</div>
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            })()}
+                            {!structured ? (
+                              <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{session.desc}</div>
+                            ) : !detailOpen ? (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                                <span style={{ fontSize: 13, fontWeight: 700 }}>{wk.summary}</span>
+                                <span style={{ fontSize: 12, opacity: 0.8 }}>· {wk.target}</span>
+                              </div>
+                            ) : (
+                              <div>
+                                <IntervalProfile segments={wk.segments} />
+                                <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.9, marginTop: 8 }}>{wk.breakdown}</div>
+                                <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.8, marginTop: 4 }}>{session.desc}</div>
+                              </div>
+                            )}
 
                             {!isRest && !state.completed && (
                               <button
-                                onClick={() => onBail(week.num, idx, session.zone)}
+                                onClick={e => { stop(e); onBail(week.num, idx, session.zone) }}
                                 style={{
                                   marginTop: 8, marginRight: 14, display: 'inline-flex', gap: 5, alignItems: 'center',
                                   cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
@@ -315,7 +306,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
 
                             {!isRest && onEditSession && (
                               <button
-                                onClick={() => setEditKey(editKey === `${week.num}_${idx}` ? null : `${week.num}_${idx}`)}
+                                onClick={e => { stop(e); setEditKey(editKey === `${week.num}_${idx}` ? null : `${week.num}_${idx}`) }}
                                 style={{
                                   marginTop: 8, display: 'inline-flex', gap: 5, alignItems: 'center',
                                   cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
@@ -328,11 +319,13 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                               </button>
                             )}
                             {onEditSession && editKey === `${week.num}_${idx}` && (
-                              <SessionEditor session={session} onChange={patch => onEditSession(week.num, idx, patch)} />
+                              <div onClick={stop}>
+                                <SessionEditor session={session} onChange={patch => onEditSession(week.num, idx, patch)} />
+                              </div>
                             )}
 
                             {state.completed && !isRest && (
-                              <div style={{ marginTop: 10, paddingTop: 8, borderTop: '0.5px solid rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <div onClick={stop} style={{ marginTop: 10, paddingTop: 8, borderTop: '0.5px solid rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                 <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.65 }}>
                                   RPE
                                 </span>
@@ -359,8 +352,16 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                               </div>
                             )}
 
-                            {matchedActivity && <ActivityDetail activity={matchedActivity} session={session} ftp={user?.ftp} maxHr={user?.max_hr} />}
+                            {matchedActivity && (
+                              <div onClick={stop}>
+                                <ActivityDetail activity={matchedActivity} session={session} ftp={user?.ftp} maxHr={user?.max_hr} />
+                              </div>
+                            )}
                           </div>
+                          {structured && (
+                            <i className={`ti ${detailOpen ? 'ti-chevron-up' : 'ti-chevron-down'}`}
+                              style={{ fontSize: 16, opacity: 0.6, flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+                          )}
                         </div>
                       </div>
                     )
