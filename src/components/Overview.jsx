@@ -169,7 +169,7 @@ function AdaptationBanner({ adaptation }) {
   )
 }
 
-function TodayCard({ plan, sessionState, planStart, onToggle, onBail }) {
+function TodayCard({ plan, sessionState, planStart, onToggle, onBail, onDownloadZwo }) {
   // Drop sessions once they're completed or bailed so the card clears itself —
   // rest days stay (nothing to action) until the day rolls over.
   const todays = getTodaySessions(plan, planStart).filter(({ session, weekNum, idx }) => {
@@ -227,6 +227,19 @@ function TodayCard({ plan, sessionState, planStart, onToggle, onBail }) {
                       : <><i className="ti ti-circle-x" style={{ fontSize: 13 }} aria-hidden="true" /> Bail</>}
                   </button>
                 )}
+                {!isRest && onDownloadZwo && (
+                  <button
+                    onClick={() => onDownloadZwo(session, weekNum, idx)}
+                    style={{
+                      marginTop: 8, marginLeft: 14, display: 'inline-flex', gap: 5, alignItems: 'center',
+                      cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
+                      padding: 0, fontSize: 11, fontWeight: 600, color: 'inherit', opacity: 0.7,
+                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                    }}
+                  >
+                    <i className="ti ti-download" style={{ fontSize: 13 }} aria-hidden="true" /> Send to Zwift
+                  </button>
+                )}
               </div>
             </div>
           )
@@ -257,7 +270,43 @@ function StravaCard({ strava }) {
   )
 }
 
-export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], streak, loadCtx, events = [], plannedWeeks = [], realCurrentWeek = 1, needsPlan, onPlanWeek, onToggle, onBail, onRPE, doneSessions, totalSessions, daysLeft, strava }) {
+// Zwift export prompt. Folder sync (hands-off) where the browser supports it,
+// with the per-session "Send to Zwift" download as the universal fallback.
+function ZwiftCard({ zwift }) {
+  if (!zwift) return null
+  const { supported, linked, status, hasFtp, onLink, onSync, onUnlink } = zwift
+  const orange = '#FC6719'
+  const wrap = children => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 1.25rem', fontSize: 12, color: 'var(--color-text-muted)' }}>
+      <i className="ti ti-brand-zwift" style={{ fontSize: 15, color: orange, flexShrink: 0 }} aria-hidden="true" />
+      {children}
+    </div>
+  )
+  if (!hasFtp) return wrap(<span>Set your FTP to send structured workouts to Zwift.</span>)
+  if (!supported) return wrap(<span>Use <strong>Send to Zwift</strong> on a session to download its workout — or open this in Chrome/Edge on desktop to auto-sync your week into Zwift.</span>)
+  if (!linked) return wrap(
+    <>
+      <button className="btn btn-sm" onClick={onLink} style={{ background: orange, borderColor: orange, color: '#fff' }}>
+        <i className="ti ti-brand-zwift" aria-hidden="true" /> Link Zwift folder
+      </button>
+      <span>once, and this week's workouts appear in Zwift's Custom Workouts automatically.</span>
+    </>
+  )
+  return wrap(
+    <>
+      <span style={{ color: 'var(--color-green-text)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <i className="ti ti-circle-check" aria-hidden="true" /> Zwift folder linked
+      </span>
+      {status?.error
+        ? <span style={{ color: 'var(--color-red-text)' }}>{status.error}</span>
+        : status?.count != null && <span>· {status.count} workout{status.count === 1 ? '' : 's'} ready</span>}
+      <button className="btn btn-sm" onClick={onSync}><i className="ti ti-refresh" aria-hidden="true" /> Sync now</button>
+      <button onClick={onUnlink} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', fontSize: 11, textDecoration: 'underline' }}>Unlink</button>
+    </>
+  )
+}
+
+export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], streak, loadCtx, events = [], plannedWeeks = [], realCurrentWeek = 1, needsPlan, onPlanWeek, onToggle, onBail, onRPE, onDownloadZwo, zwift, doneSessions, totalSessions, daysLeft, strava }) {
   // This-week execution — far more relevant than whole-plan totals now.
   const [wkStart, wkEnd] = thisWeekRange()
   const weekSessions = getScheduledSessions(plan, { base: planStart })
@@ -323,8 +372,9 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
       </div>
 
       <WeekLoadGauge plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} sessionState={sessionState} />
-      <TodayCard plan={plan} sessionState={sessionState} planStart={planStart} onToggle={onToggle} onBail={onBail} />
+      <TodayCard plan={plan} sessionState={sessionState} planStart={planStart} onToggle={onToggle} onBail={onBail} onDownloadZwo={zwift?.hasFtp ? onDownloadZwo : null} />
       <StravaCard strava={strava} />
+      <ZwiftCard zwift={zwift} />
 
       {/* This-week progress bar */}
       <div style={{ marginBottom: '1.5rem' }}>

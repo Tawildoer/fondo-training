@@ -140,7 +140,7 @@ function ProgressRing({ done, total }) {
   )
 }
 
-export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, realCurrentWeek = 1, user, strava, onToggle, onBail, onRPE, onNote, onEditSession }) {
+export default function TrainingWeeks({ plan, sessionState, activities = [], planStart, adaptation, currentWeek = 1, realCurrentWeek = 1, user, strava, onToggle, onBail, onRPE, onNote, onEditSession, onDownloadZwo }) {
   // Newest/upcoming week first so the most relevant data is at the top.
   const orderedWeeks = [...plan].sort((a, b) => b.num - a.num)
   const lastSynced = strava?.account?.last_synced_at
@@ -344,6 +344,20 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                     {editKey === `${week.num}_${idx}` ? ' Done editing' : ' Edit session'}
                                   </button>
                                 )}
+                                {onDownloadZwo && user?.ftp && (
+                                  <button
+                                    onClick={e => { stop(e); onDownloadZwo(session, week.num, idx) }}
+                                    style={{
+                                      marginTop: 8, marginLeft: 14, display: 'inline-flex', gap: 5, alignItems: 'center',
+                                      cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none',
+                                      padding: 0, fontSize: 11, fontWeight: 600, color: 'inherit', opacity: 0.7,
+                                      textTransform: 'uppercase', letterSpacing: '0.05em',
+                                    }}
+                                  >
+                                    <i className="ti ti-download" style={{ fontSize: 13 }} aria-hidden="true" /> Send to Zwift
+                                  </button>
+                                )}
+
                                 {onEditSession && editKey === `${week.num}_${idx}` && (
                                   <div onClick={stop}>
                                     <SessionEditor session={session} onChange={patch => onEditSession(week.num, idx, patch)} />

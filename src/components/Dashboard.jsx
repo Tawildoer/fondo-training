@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { generatePlan, computeAdaptation, applyAdaptation } from '../lib/planGenerator'
-import { getPlanStart, getCurrentWeekNum, getUnconfirmedSessions, computeStreak, localDateStr, nextEvent } from '../lib/schedule'
+import { getPlanStart, getCurrentWeekNum, getUnconfirmedSessions, computeStreak, localDateStr, nextEvent, getScheduledSessions, getSessionDate } from '../lib/schedule'
 import { celebrate } from '../lib/celebrate'
 import { parseLeadingMinutes, computeTrainingLoad } from '../lib/trainingLoad'
 import { loadSessionState, upsertSessionState, loadAdjustments, addAdjustment, deleteAdjustment, updateUser, loadFtpHistory, addFtpEntry, getStravaAccount, loadActivities, loadPlannedWeeks, upsertPlannedWeek, deletePlannedWeek, loadEvents, addEvent, updateEvent, deleteEvent } from '../lib/supabase'
@@ -14,6 +14,8 @@ import PlanGuide from './PlanGuide'
 import WeeklyPlanner from './WeeklyPlanner'
 import { buildSession } from '../lib/weeklyPlanner'
 import { rebalanceForBail } from '../lib/rebalance'
+import { buildZwo } from '../lib/zwo'
+import { downloadZwo, supportsFolderSync, linkZwiftFolder, loadHandle, forgetHandle, permission as zwiftPermission, writeSessions } from '../lib/zwiftSync'
 
 // Reconstruct the app-wide plan shape from persisted weekly-planner weeks.
 function buildPlanFromWeeks(weeks) {
@@ -68,6 +70,11 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
 
   // Transient "we rebalanced your week" notice with an undo affordance.
   const [rebalanceToast, setRebalanceToast] = useState(null)
+
+  // Zwift folder sync: a granted directory handle (persisted in IndexedDB) plus
+  // a small status line for the connect card.
+  const [zwiftDir, setZwiftDir] = useState(null)
+  const [zwiftStatus, setZwiftStatus] = useState(null) // { count } | { error }
 
   // Plan source depends on mode: weekly mode reconstructs from persisted
   // bespoke weeks; fixed mode generates the template plan from the profile.
@@ -385,6 +392,82 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     return { currentCtl: tl.current.ctl, currentTsb: tl.current.tsb, recentWeeklyTss: Math.round(recentWeeklyTss) }
   }, [plan, sessionState, activities, user, planStart])
 
+  // ── Zwift export ──────────────────────────────────────────────
+  // Upcoming non-rest sessions (this week + next), rendered to .zwo, for the
+  // folder sync. Stable per session so re-syncs overwrite rather than pile up.
+  const buildZwiftItems = useCallback(() => {
+    if (!user.ftp) return []
+    const today0 = new Date(); today0.setHours(0, 0, 0, 0)
+    return getScheduledSessions(plan, { base: planStart })
+      .filter(s => s.session.zone !== 'rest' && s.date >= today0 && s.weekNum <= realCurrentWeek + 1)
+      .map(s => ({
+        weekNum: s.weekNum,
+        idx: s.idx,
+        xml: buildZwo(s.session, user.ftp, s.date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })),
+      }))
+  }, [plan, planStart, realCurrentWeek, user.ftp])
+
+  const syncZwift = useCallback(async (handle, { silent = false } = {}) => {
+    if (!handle) return
+    try {
+      const count = await writeSessions(handle, buildZwiftItems())
+      setZwiftStatus({ count })
+    } catch (e) {
+      if (!silent) setZwiftStatus({ error: e?.message || 'Sync failed' })
+    }
+  }, [buildZwiftItems])
+
+  // Restore a previously-linked folder handle on load.
+  useEffect(() => { loadHandle().then(h => { if (h) setZwiftDir(h) }) }, [])
+
+  // Keep the folder stocked: re-write whenever the plan changes — but only while
+  // permission is already granted, so this never pops a dialog without a gesture.
+  useEffect(() => {
+    if (loading || !zwiftDir) return
+    let cancelled = false
+    zwiftPermission(zwiftDir, false).then(state => {
+      if (!cancelled && state === 'granted') syncZwift(zwiftDir, { silent: true })
+    })
+    return () => { cancelled = true }
+  }, [loading, zwiftDir, plan, syncZwift])
+
+  async function handleLinkZwift() {
+    try {
+      const handle = await linkZwiftFolder()
+      const state = await zwiftPermission(handle, true)
+      if (state !== 'granted') { setZwiftStatus({ error: 'Permission needed' }); return }
+      setZwiftDir(handle)
+      await syncZwift(handle)
+    } catch (e) {
+      if (e?.name !== 'AbortError') setZwiftStatus({ error: e?.message || 'Could not link folder' })
+    }
+  }
+  async function handleSyncZwiftNow() {
+    if (!zwiftDir) return
+    const state = await zwiftPermission(zwiftDir, true)
+    if (state !== 'granted') { setZwiftStatus({ error: 'Permission needed' }); return }
+    await syncZwift(zwiftDir)
+  }
+  async function handleUnlinkZwift() {
+    await forgetHandle()
+    setZwiftDir(null)
+    setZwiftStatus(null)
+  }
+  const handleDownloadZwo = useCallback((session, weekNum, idx) => {
+    const date = getSessionDate(weekNum, session, idx, planStart)
+    downloadZwo(session, user.ftp, date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }))
+  }, [planStart, user.ftp])
+
+  const zwift = {
+    supported: supportsFolderSync(),
+    linked: !!zwiftDir,
+    status: zwiftStatus,
+    hasFtp: !!user.ftp,
+    onLink: handleLinkZwift,
+    onSync: handleSyncZwiftNow,
+    onUnlink: handleUnlinkZwift,
+  }
+
   // The week you'd actually plan now (weekend → the upcoming week), kept in
   // sync with WeeklyPlanner's default so the CTA doesn't nag about a dead week.
   const planningWeekNum = realCurrentWeek + ([0, 6].includes(new Date().getDay()) ? 1 : 0)
@@ -481,12 +564,12 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
         </div>
       ) : (
         <>
-          {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} activities={activities} streak={streak} loadCtx={loadCtx} events={effectiveEvents} plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
+          {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} activities={activities} streak={streak} loadCtx={loadCtx} events={effectiveEvents} plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onDownloadZwo={handleDownloadZwo} zwift={zwift} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
             needsPlan={weeklyMode && !currentWeekPlanned} onPlanWeek={() => setTab('plan-week')}
             strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }} />}
           {tab === 'plan-week' && weeklyMode && <WeeklyPlanner user={user} planStart={planStart} weekNum={realCurrentWeek} plannedWeeks={plannedWeeks} events={effectiveEvents} loadCtx={loadCtx} onSave={handleSaveWeek} onDelete={handleDeleteWeek} onGenerated={() => setTab('training')} />}
           {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={upcomingEvent?.name} events={effectiveEvents} onAddEvent={handleAddEvent} onUpdateEvent={handleUpdateEvent} onDeleteEvent={handleDeleteEvent} />}
-          {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} realCurrentWeek={realCurrentWeek} user={user} strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onSync: handleSyncStrava }} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} onEditSession={handleEditSession} />}
+          {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} realCurrentWeek={realCurrentWeek} user={user} strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onSync: handleSyncStrava }} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} onEditSession={handleEditSession} onDownloadZwo={handleDownloadZwo} />}
           {tab === 'guide' && <PlanGuide plan={adjustedPlan} user={user} />}
           {tab === 'analytics' && <Analytics user={user} onUpdateFTP={handleUpdateFTP} ftpHistory={ftpHistory} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} activities={activities} events={effectiveEvents} loadCtx={loadCtx} plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} />}
 {tab === 'adjustments' && <Adjustments user={user} adjustments={adjustments} plan={adjustedPlan} onAdd={handleAddAdjustment} onDelete={handleDeleteAdjustment} onUpdateFTP={handleUpdateFTP} />}
