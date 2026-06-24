@@ -219,7 +219,7 @@ export default function AccountMenu({ user, authEmail, strava, zwift, onUpdatePr
           <aside className="drawer" role="dialog" aria-label="Menu">
             <div className="drawer-head">
               <span className="drawer-title">Menu</span>
-              <button className="drawer-x" onClick={() => setOpen(false)} aria-label="Close menu"><i className="ti ti-x" /></button>
+              <button className="drawer-x" onClick={() => setOpen(false)} aria-label="Close menu">×</button>
             </div>
             <div className="drawer-tabs">
               {SECTIONS.map(s => (
