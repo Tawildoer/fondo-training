@@ -2,7 +2,41 @@ import { useState } from 'react'
 import { getTodaySessions, getScheduledSessions, localDateStr, nextEvent } from '../lib/schedule'
 import { RPE_LABELS } from '../lib/planGenerator'
 import { parseLeadingMinutes } from '../lib/trainingLoad'
+import { weekTss } from '../lib/weeklyPlanner'
 import { WeekCoach, LastRideCoach } from './Coach'
+
+// Where the current week stands against its load budget. Makes a bail's
+// consequence visible — and shows the gap closing after an auto-rebalance.
+function WeekLoadGauge({ plannedWeeks, realCurrentWeek, sessionState }) {
+  const row = plannedWeeks.find(w => w.week_num === realCurrentWeek)
+  if (!row?.sessions?.length || !row.target_tss) return null
+  // Committed load = sessions you'll actually do (everything except bailed ones).
+  const live = row.sessions.filter((s, i) => !sessionState[`w${row.week_num}_${i}`]?.bailed)
+  const committed = weekTss(live)
+  const remaining = row.sessions.filter((s, i) => {
+    if (!s || s.zone === 'rest') return false
+    const st = sessionState[`w${row.week_num}_${i}`] || {}
+    return !st.completed && !st.bailed
+  }).length
+  const target = row.target_tss
+  const pct = Math.min(100, Math.round((committed / target) * 100))
+  const behind = committed < target * 0.9
+
+  return (
+    <div style={{ marginBottom: '1.25rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+        <span>Week load{behind ? ' · behind target' : ''}</span>
+        <span>
+          <strong style={{ color: behind ? 'var(--color-amber-text)' : 'var(--color-accent-text)' }}>{committed}</strong> / {target} TSS
+          {remaining ? ` · ${remaining} to go` : ''}
+        </span>
+      </div>
+      <div className="progress-track">
+        <div className="progress-fill" style={{ width: `${pct}%`, ...(behind ? { background: 'var(--color-amber-text)' } : {}) }} />
+      </div>
+    </div>
+  )
+}
 
 // Monday 00:00 → Sunday 23:59 of the week containing `now`.
 function thisWeekRange(now = new Date()) {
@@ -288,6 +322,7 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
         <div className="stat-card"><div className="val">{loadCtx?.currentCtl || '—'}</div><div className="lbl">Fitness (CTL)</div></div>
       </div>
 
+      <WeekLoadGauge plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} sessionState={sessionState} />
       <TodayCard plan={plan} sessionState={sessionState} planStart={planStart} onToggle={onToggle} onBail={onBail} />
       <StravaCard strava={strava} />
 

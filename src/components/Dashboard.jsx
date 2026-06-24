@@ -13,6 +13,7 @@ import CalendarView from './CalendarView'
 import PlanGuide from './PlanGuide'
 import WeeklyPlanner from './WeeklyPlanner'
 import { buildSession } from '../lib/weeklyPlanner'
+import { rebalanceForBail } from '../lib/rebalance'
 
 // Reconstruct the app-wide plan shape from persisted weekly-planner weeks.
 function buildPlanFromWeeks(weeks) {
@@ -59,6 +60,14 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     : (user?.event_date ? [{ id: 'legacy', name: user.event_name, date: user.event_date, event_type: user.event_type, distance_km: user.event_distance_km }] : [])
   const upcomingEvent = nextEvent(effectiveEvents)
   const daysLeft = upcomingEvent?._date ? Math.ceil((upcomingEvent._date - new Date()) / (1000 * 60 * 60 * 24)) : null
+
+  // Plan anchoring (fixed start date → real-time week number). Declared up here
+  // so the bail handler below can reference them in its dependency array.
+  const planStart = useMemo(() => getPlanStart(user), [user?.plan_start_date])
+  const realCurrentWeek = useMemo(() => getCurrentWeekNum(planStart), [planStart])
+
+  // Transient "we rebalanced your week" notice with an undo affordance.
+  const [rebalanceToast, setRebalanceToast] = useState(null)
 
   // Plan source depends on mode: weekly mode reconstructs from persisted
   // bespoke weeks; fixed mode generates the template plan from the profile.
@@ -161,7 +170,67 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     // Bailing clears completion (and its timestamp); un-bailing just lifts the mark.
     setSessionState(prev => ({ ...prev, [key]: { ...prev[key], bailed: newBailed, completed: newBailed ? false : prev[key]?.completed, zone } }))
     await upsertSessionState(user.id, weekNum, idx, { bailed: newBailed, ...(newBailed ? { completed: false, completed_at: null } : {}) })
-  }, [sessionState, user.id])
+
+    // Weekly mode: a bail isn't a silent drop — auto-rebalance the week's load
+    // (and spill into next week) so the missed fitness is recouped where it
+    // safely can be. Past weeks just carry the mark.
+    if (!weeklyMode) return
+    const row = plannedWeeks.find(w => w.week_num === weekNum)
+    if (!row) return
+
+    if (newBailed) {
+      if (weekNum < realCurrentWeek) return
+      const nextRow = plannedWeeks.find(w => w.week_num === weekNum + 1) || null
+      const result = rebalanceForBail({
+        week: { num: weekNum, sessions: row.sessions },
+        nextWeek: nextRow ? { num: nextRow.week_num, sessions: nextRow.sessions, target_tss: nextRow.target_tss } : null,
+        bailedIdx: idx, planStart, ftp: user.ftp,
+      })
+      if (!result) return
+
+      // Snapshot the pre-rebalance sessions (this week + any touched next week)
+      // onto the row so undo / un-bail can restore them after a refresh.
+      const snapshot = { prevSessions: row.sessions, idx, zone, summary: result.summary }
+      if (result.nextWeek && nextRow) snapshot.next = { weekNum: nextRow.week_num, prevSessions: nextRow.sessions }
+      const inputs = { ...(row.inputs || {}), rebalance: snapshot, carryOut: result.nextWeekExists ? 0 : result.carryTss }
+
+      setPlannedWeeks(prev => prev.map(w => {
+        if (w.week_num === weekNum) return { ...w, sessions: result.week, inputs }
+        if (result.nextWeek && nextRow && w.week_num === nextRow.week_num) return { ...w, sessions: result.nextWeek }
+        return w
+      }))
+      setRebalanceToast({ weekNum, idx, zone, summary: result.summary })
+
+      const savedW = await upsertPlannedWeek(user.id, weekNum, { sessions: result.week, week_start: row.week_start, inputs })
+      if (savedW) setPlannedWeeks(prev => prev.map(w => (w.week_num === weekNum ? savedW : w)))
+      if (result.nextWeek && nextRow) {
+        const savedN = await upsertPlannedWeek(user.id, nextRow.week_num, { sessions: result.nextWeek, week_start: nextRow.week_start })
+        if (savedN) setPlannedWeeks(prev => prev.map(w => (w.week_num === nextRow.week_num ? savedN : w)))
+      }
+    } else {
+      // Un-bail: restore the rebalance snapshot (if this bail had triggered one).
+      const rb = row.inputs?.rebalance
+      if (!rb) return
+      const inputs = { ...(row.inputs || {}) }
+      delete inputs.rebalance
+      delete inputs.carryOut
+      setRebalanceToast(null)
+      setPlannedWeeks(prev => prev.map(w => {
+        if (w.week_num === weekNum) return { ...w, sessions: rb.prevSessions, inputs }
+        if (rb.next && w.week_num === rb.next.weekNum) return { ...w, sessions: rb.next.prevSessions }
+        return w
+      }))
+      const savedW = await upsertPlannedWeek(user.id, weekNum, { sessions: rb.prevSessions, week_start: row.week_start, inputs })
+      if (savedW) setPlannedWeeks(prev => prev.map(w => (w.week_num === weekNum ? savedW : w)))
+      if (rb.next) {
+        const nrow = plannedWeeks.find(w => w.week_num === rb.next.weekNum)
+        if (nrow) {
+          const savedN = await upsertPlannedWeek(user.id, rb.next.weekNum, { sessions: rb.next.prevSessions, week_start: nrow.week_start })
+          if (savedN) setPlannedWeeks(prev => prev.map(w => (w.week_num === rb.next.weekNum ? savedN : w)))
+        }
+      }
+    }
+  }, [sessionState, user.id, user.ftp, weeklyMode, plannedWeeks, realCurrentWeek, planStart])
 
   const setRPE = useCallback(async (weekNum, idx, rpe, zone) => {
     const key = `w${weekNum}_${idx}`
@@ -260,10 +329,9 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     setSyncing(false)
   }
 
-  // Adaptive layer — anchor the plan in real time, then adjust upcoming weeks
-  // from the confirmed recent-week signals. All derived, no extra storage.
-  const planStart = useMemo(() => getPlanStart(user), [user?.plan_start_date])
-  const realCurrentWeek = useMemo(() => getCurrentWeekNum(planStart), [planStart])
+  // Adaptive layer — adjust upcoming weeks from the confirmed recent-week
+  // signals. All derived, no extra storage. (planStart/realCurrentWeek are
+  // declared earlier so the bail handler can use them.)
   const currentWeek = useMemo(
     () => Math.min(plan.length || 1, realCurrentWeek),
     [realCurrentWeek, plan.length]
@@ -380,6 +448,19 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
           </button>
         </div>
       </div>
+
+      {rebalanceToast && (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', marginBottom: 12, borderLeft: '3px solid var(--color-electric)' }}>
+          <i className="ti ti-refresh" style={{ fontSize: 17, color: 'var(--color-electric)', flexShrink: 0 }} aria-hidden="true" />
+          <span style={{ flex: 1, fontSize: 13, lineHeight: 1.45 }}>{rebalanceToast.summary}</span>
+          <button className="btn btn-sm" onClick={() => bailSession(rebalanceToast.weekNum, rebalanceToast.idx, rebalanceToast.zone)}>
+            <i className="ti ti-arrow-back-up" aria-hidden="true" /> Undo
+          </button>
+          <button onClick={() => setRebalanceToast(null)} aria-label="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex', padding: 4 }}>
+            <i className="ti ti-x" style={{ fontSize: 15 }} aria-hidden="true" />
+          </button>
+        </div>
+      )}
 
       <div className="tabs" ref={tabsRef}>
         <span

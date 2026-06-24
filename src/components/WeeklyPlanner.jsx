@@ -153,9 +153,19 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
     weekNum: activeWeekNum,
   }), [loadCtx, weeksToEvent, weeksSinceEvent, activeWeekNum, user.weekly_hours_start, user.days_per_week])
 
+  // Load carried over from a bailed session the previous week that couldn't be
+  // recouped within that week — this week absorbs it so misses don't vanish.
+  const carryIn = useMemo(() => {
+    const prev = plannedWeeks.find(w => w.week_num === activeWeekNum - 1)
+    return Math.max(0, Math.round(prev?.inputs?.carryOut || 0))
+  }, [plannedWeeks, activeWeekNum])
+  const withCarry = t => carryIn > 0
+    ? { ...t, targetTss: t.targetTss + carryIn, targetHours: Math.round((t.targetHours + carryIn / 52) * 2) / 2 }
+    : t
+
   // Live recommendation (independent of which days you pick) so you know how
   // much to aim for before you even slide the days.
-  const suggestion = useMemo(() => computeWeekTarget(inputs, ctx), [inputs, ctx])
+  const suggestion = useMemo(() => withCarry(computeWeekTarget(inputs, ctx)), [inputs, ctx, carryIn])
 
   const weekLabel = weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
@@ -175,7 +185,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   // sessions afterwards from Training weeks.
   async function generate() {
     setSaving(true)
-    const t = computeWeekTarget(inputs, ctx)
+    const t = withCarry(computeWeekTarget(inputs, ctx))
     const sessions = draftWeek(t, inputs, user.ftp)
     await onSave(activeWeekNum, {
       week_start: localDateStr(weekStart),
@@ -250,6 +260,11 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                   <span style={{ fontSize: 12, opacity: 0.85 }}>≈ {suggestion.targetTss} TSS · you've set {totalHours} h</span>
                 </div>
                 <div style={{ fontSize: 12, opacity: 0.9, marginTop: 3, lineHeight: 1.4 }}>{suggestion.note}</div>
+                {carryIn > 0 && (
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-electric)', marginTop: 4 }}>
+                    +{carryIn} TSS carried over from last week's missed session.
+                  </div>
+                )}
                 {loadCtx?.currentCtl > 0 && (
                   <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>
                     Fitness {loadCtx.currentCtl} → ~{projectCtl(loadCtx.currentCtl, suggestion.targetTss)} CTL if you hit it
