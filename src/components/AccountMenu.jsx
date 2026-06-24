@@ -123,6 +123,7 @@ function Row({ icon, color, title, children }) {
 
 function ConnectionsSection({ strava, zwift }) {
   const muted = { fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }
+  const [help, setHelp] = useState(false)
   return (
     <div>
       {/* Strava */}
@@ -159,9 +160,22 @@ function ConnectionsSection({ strava, zwift }) {
         ) : !zwift.linked ? (
           <>
             <div style={{ ...muted, marginBottom: 8 }}>Link your Zwift Workouts folder once, and this week's sessions appear in Zwift's Custom Workouts automatically.</div>
-            <button className="btn btn-sm" onClick={zwift.onLink} style={{ background: '#FC6719', borderColor: '#FC6719', color: '#fff' }}>
-              <i className="ti ti-brand-zwift" aria-hidden="true" /> Link Zwift folder
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button className="btn btn-sm" onClick={zwift.onLink} style={{ background: '#FC6719', borderColor: '#FC6719', color: '#fff' }}>
+                <i className="ti ti-brand-zwift" aria-hidden="true" /> Link Zwift folder
+              </button>
+              <button
+                onClick={() => setHelp(h => !h)} aria-label="Which folder do I pick?" aria-expanded={help}
+                style={{ width: 20, height: 20, borderRadius: '50%', border: '1px solid var(--color-border-strong)', background: help ? 'var(--color-surface2)' : 'none', color: 'var(--color-text-muted)', cursor: 'pointer', fontSize: 12, fontWeight: 700, lineHeight: 1, flexShrink: 0, fontFamily: 'inherit' }}
+              >?</button>
+            </div>
+            {help && (
+              <div style={{ ...muted, marginTop: 8, padding: '8px 10px', background: 'var(--color-surface2)', borderRadius: 'var(--radius-sm)' }}>
+                Pick your Zwift <strong>Workouts</strong> folder:
+                <div style={{ marginTop: 4 }}><code>…/Documents/Zwift/Workouts/&lt;id&gt;/</code></div>
+                <div style={{ marginTop: 5 }}><code>&lt;id&gt;</code> is your numeric Zwift user id — if there are several, choose the one with recently-dated files. Workouts saved there sync to Zwift's cloud and show under Custom Workouts on all your devices.</div>
+              </div>
+            )}
           </>
         ) : (
           <>
