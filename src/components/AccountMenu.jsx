@@ -3,6 +3,7 @@
 // pages so the day-to-day view stays focused on training.
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 const SECTIONS = [
   { id: 'account', label: 'Account', icon: 'ti-user' },
@@ -194,11 +195,11 @@ export default function AccountMenu({ user, authEmail, strava, zwift, onUpdatePr
 
   return (
     <>
-      <button className="hero-btn" onClick={() => setOpen(true)} title="Menu" aria-label="Open menu" style={{ gap: 6 }}>
-        <i className="ti ti-menu-2" style={{ fontSize: 18 }} aria-hidden="true" />
+      <button className="hero-btn" onClick={() => setOpen(true)} title="Menu" aria-label="Open menu">
+        <span className="burger-ico" aria-hidden="true"><span /><span /><span /></span>
       </button>
 
-      {open && (
+      {open && createPortal(
         <>
           <div className="drawer-backdrop" onClick={() => setOpen(false)} />
           <aside className="drawer" role="dialog" aria-label="Menu">
@@ -219,7 +220,8 @@ export default function AccountMenu({ user, authEmail, strava, zwift, onUpdatePr
               {section === 'connections' && <ConnectionsSection strava={strava} zwift={zwift} />}
             </div>
           </aside>
-        </>
+        </>,
+        document.body
       )}
     </>
   )
