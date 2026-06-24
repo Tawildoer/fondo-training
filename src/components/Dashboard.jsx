@@ -12,6 +12,7 @@ import Overview from './Overview'
 import CalendarView from './CalendarView'
 import PlanGuide from './PlanGuide'
 import WeeklyPlanner from './WeeklyPlanner'
+import AccountMenu from './AccountMenu'
 import { buildSession } from '../lib/weeklyPlanner'
 import { rebalanceForBail } from '../lib/rebalance'
 import { buildZwo } from '../lib/zwo'
@@ -37,7 +38,7 @@ function buildPlanFromWeeks(weeks) {
     })
 }
 
-export default function Dashboard({ user, onLogout, onUpdateUser }) {
+export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
   const [tab, setTab] = useState('overview')
   const [plan, setPlan] = useState([])
   const [sessionState, setSessionState] = useState({}) // { 'w1_0': { completed, rpe, notes, zone } }
@@ -270,6 +271,12 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     onUpdateUser(updated) // the plan effect rebuilds for the active mode
   }
 
+  // Update editable profile settings (max HR, weekly hours, days, goal, name).
+  async function handleUpdateProfile(patch) {
+    await updateUser(user.id, patch)
+    onUpdateUser({ ...user, ...patch })
+  }
+
   async function handleSaveWeek(weekNumToSave, fields) {
     const saved = await upsertPlannedWeek(user.id, weekNumToSave, fields)
     if (saved) setPlannedWeeks(prev => [...prev.filter(w => w.week_num !== weekNumToSave), saved].sort((a, b) => a.week_num - b.week_num))
@@ -467,6 +474,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
     onSync: handleSyncZwiftNow,
     onUnlink: handleUnlinkZwift,
   }
+  const strava = { configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }
 
   // The week you'd actually plan now (weekend → the upcoming week), kept in
   // sync with WeeklyPlanner's default so the CTA doesn't nag about a dead week.
@@ -526,9 +534,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
               <div className="lbl">days left</div>
             </div>
           )}
-          <button className="hero-btn" onClick={onLogout} title="Log out" style={{ gap: 6 }}>
-            <i className="ti ti-logout" aria-hidden="true" /> <span style={{ fontSize: 13, fontWeight: 600 }}>Log out</span>
-          </button>
+          <AccountMenu user={user} authEmail={authEmail} strava={strava} zwift={zwift} onUpdateProfile={handleUpdateProfile} onUpdateFTP={handleUpdateFTP} onLogout={onLogout} />
         </div>
       </div>
 
@@ -565,13 +571,12 @@ export default function Dashboard({ user, onLogout, onUpdateUser }) {
       ) : (
         <>
           {tab === 'overview' && <Overview user={user} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} adaptation={adaptation} unconfirmed={unconfirmed} activities={activities} streak={streak} loadCtx={loadCtx} events={effectiveEvents} plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onDownloadZwo={handleDownloadZwo} zwift={zwift} doneSessions={doneSessions} totalSessions={totalSessions} daysLeft={daysLeft}
-            needsPlan={weeklyMode && !currentWeekPlanned} onPlanWeek={() => setTab('plan-week')}
-            strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onConnect: handleConnectStrava, onSync: handleSyncStrava }} />}
+            needsPlan={weeklyMode && !currentWeekPlanned} onPlanWeek={() => setTab('plan-week')} />}
           {tab === 'plan-week' && weeklyMode && <WeeklyPlanner user={user} planStart={planStart} weekNum={realCurrentWeek} plannedWeeks={plannedWeeks} events={effectiveEvents} loadCtx={loadCtx} onSave={handleSaveWeek} onDelete={handleDeleteWeek} onGenerated={() => setTab('training')} />}
           {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={upcomingEvent?.name} events={effectiveEvents} onAddEvent={handleAddEvent} onUpdateEvent={handleUpdateEvent} onDeleteEvent={handleDeleteEvent} />}
           {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} realCurrentWeek={realCurrentWeek} user={user} strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onSync: handleSyncStrava }} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} onEditSession={handleEditSession} onDownloadZwo={handleDownloadZwo} />}
           {tab === 'guide' && <PlanGuide plan={adjustedPlan} user={user} />}
-          {tab === 'analytics' && <Analytics user={user} onUpdateFTP={handleUpdateFTP} ftpHistory={ftpHistory} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} activities={activities} events={effectiveEvents} loadCtx={loadCtx} plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} />}
+          {tab === 'analytics' && <Analytics user={user} ftpHistory={ftpHistory} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} activities={activities} events={effectiveEvents} loadCtx={loadCtx} plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} />}
 {tab === 'adjustments' && <Adjustments user={user} adjustments={adjustments} plan={adjustedPlan} onAdd={handleAddAdjustment} onDelete={handleDeleteAdjustment} onUpdateFTP={handleUpdateFTP} />}
         </>
       )}

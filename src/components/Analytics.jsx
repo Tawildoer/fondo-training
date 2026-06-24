@@ -164,7 +164,7 @@ function TrainingLoadCard({ plan, sessionState, activities, user, planStart }) {
   )
 }
 
-export default function Analytics({ user, onUpdateFTP, ftpHistory = [], plan, sessionState = {}, planStart, activities = [], events = [], loadCtx, plannedWeeks = [], realCurrentWeek = 1 }) {
+export default function Analytics({ user, ftpHistory = [], plan, sessionState = {}, planStart, activities = [], events = [], loadCtx, plannedWeeks = [], realCurrentWeek = 1 }) {
   const projection = useMemo(() => projectLoad({
     currentCtl: loadCtx?.currentCtl || 0,
     recentWeeklyTss: loadCtx?.recentWeeklyTss || 0,
@@ -178,7 +178,7 @@ export default function Analytics({ user, onUpdateFTP, ftpHistory = [], plan, se
         <ProjectionChart series={projection} events={events} />
       </div>
       <RiderRadar activities={activities} ftp={user?.ftp} ctl={loadCtx?.currentCtl} />
-      <PowerZones user={user} onUpdateFTP={onUpdateFTP} ftpHistory={ftpHistory} />
+      <PowerZones user={user} ftpHistory={ftpHistory} />
     </div>
   )
 }

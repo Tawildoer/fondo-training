@@ -91,5 +91,5 @@ export default function App() {
   if (screen === 'login') return <Login onSignedIn={handleSignedIn} onSignedUp={handleSignedUp} />
   if (screen === 'reset-password') return <ResetPassword onSignedIn={handleSignedIn} onSignedUp={handleSignedUp} />
   if (screen === 'onboarding') return <Onboarding authUser={authUser} onComplete={handleOnboardingComplete} />
-  if (screen === 'dashboard') return <Dashboard user={user} onLogout={handleLogout} onUpdateUser={setUser} />
+  if (screen === 'dashboard') return <Dashboard user={user} authEmail={authUser?.email} onLogout={handleLogout} onUpdateUser={setUser} />
 }

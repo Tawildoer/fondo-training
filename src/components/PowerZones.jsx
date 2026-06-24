@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { ZONE_DEFINITIONS } from '../lib/planGenerator'
 
 // HR zones run on their own %-of-max curve (not the power %FTP curve), shown
@@ -95,21 +94,9 @@ function ZoneLadder({ ftp, maxHR }) {
   )
 }
 
-export default function PowerZones({ user, onUpdateFTP, ftpHistory = [] }) {
-  const [ftpInput, setFtpInput] = useState('')
-  const [saving, setSaving] = useState(false)
+export default function PowerZones({ user, ftpHistory = [] }) {
   const ftp = user.ftp
   const maxHR = user.max_hr
-
-  async function handleFTPSubmit(e) {
-    e.preventDefault()
-    const parsed = parseInt(ftpInput)
-    if (!parsed || parsed < 50 || parsed > 600) return
-    setSaving(true)
-    await onUpdateFTP(parsed)
-    setFtpInput('')
-    setSaving(false)
-  }
 
   const first = ftpHistory[0]
   const last = ftpHistory[ftpHistory.length - 1]
@@ -131,15 +118,8 @@ export default function PowerZones({ user, onUpdateFTP, ftpHistory = [] }) {
                 </span>
               )}
             </div>
-            <form onSubmit={handleFTPSubmit} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-              <div className="field" style={{ flex: 1, marginBottom: 0 }}>
-                <label htmlFor="ftp-update">Update FTP (watts)</label>
-                <input id="ftp-update" type="number" value={ftpInput} onChange={e => setFtpInput(e.target.value)} placeholder={ftp ? `Current: ${ftp}W` : 'e.g. 250'} min="50" max="600" />
-              </div>
-              <button type="submit" className="btn btn-primary" disabled={saving || !ftpInput}>{saving ? 'Saving…' : 'Update'}</button>
-            </form>
             <p style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 7 }}>
-              Recalculates zones and regenerates plan targets. Re-test every 4–6 weeks (recovery weeks are ideal).
+              Edit your FTP in <strong>Menu → Settings</strong>. It recalculates zones and plan targets — re-test every 4–6 weeks (recovery weeks are ideal).
             </p>
           </div>
           <div style={{ flex: '1 1 260px', minWidth: 240, maxWidth: 460 }}>

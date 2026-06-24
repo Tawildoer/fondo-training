@@ -249,64 +249,8 @@ function TodayCard({ plan, sessionState, planStart, onToggle, onBail, onDownload
   )
 }
 
-// First-time Strava connect prompt. Once connected, ride sync lives in Training
-// weeks (it happens automatically; that's just a manual failsafe).
-function StravaCard({ strava }) {
-  if (!strava?.configured || strava.account) return null
-  const { onConnect } = strava
 
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 1.25rem', fontSize: 12, color: 'var(--color-text-muted)' }}>
-      <i className="ti ti-brand-strava" style={{ fontSize: 15, color: '#FC4C02', flexShrink: 0 }} aria-hidden="true" />
-      <button
-        className="btn btn-sm"
-        onClick={onConnect}
-        style={{ background: '#FC4C02', borderColor: '#FC4C02', color: '#fff' }}
-      >
-        <i className="ti ti-brand-strava" aria-hidden="true" /> Connect Strava
-      </button>
-      <span>to attach ride data to each session.</span>
-    </div>
-  )
-}
-
-// Zwift export prompt. Folder sync (hands-off) where the browser supports it,
-// with the per-session "Send to Zwift" download as the universal fallback.
-function ZwiftCard({ zwift }) {
-  if (!zwift) return null
-  const { supported, linked, status, hasFtp, onLink, onSync, onUnlink } = zwift
-  const orange = '#FC6719'
-  const wrap = children => (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 1.25rem', fontSize: 12, color: 'var(--color-text-muted)' }}>
-      <i className="ti ti-brand-zwift" style={{ fontSize: 15, color: orange, flexShrink: 0 }} aria-hidden="true" />
-      {children}
-    </div>
-  )
-  if (!hasFtp) return wrap(<span>Set your FTP to send structured workouts to Zwift.</span>)
-  if (!supported) return wrap(<span>Use <strong>Send to Zwift</strong> on a session to download its workout — or open this in Chrome/Edge on desktop to auto-sync your week into Zwift.</span>)
-  if (!linked) return wrap(
-    <>
-      <button className="btn btn-sm" onClick={onLink} style={{ background: orange, borderColor: orange, color: '#fff' }}>
-        <i className="ti ti-brand-zwift" aria-hidden="true" /> Link Zwift folder
-      </button>
-      <span>once, and this week's workouts appear in Zwift's Custom Workouts automatically.</span>
-    </>
-  )
-  return wrap(
-    <>
-      <span style={{ color: 'var(--color-green-text)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <i className="ti ti-circle-check" aria-hidden="true" /> Zwift folder linked
-      </span>
-      {status?.error
-        ? <span style={{ color: 'var(--color-red-text)' }}>{status.error}</span>
-        : status?.count != null && <span>· {status.count} workout{status.count === 1 ? '' : 's'} ready</span>}
-      <button className="btn btn-sm" onClick={onSync}><i className="ti ti-refresh" aria-hidden="true" /> Sync now</button>
-      <button onClick={onUnlink} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', fontSize: 11, textDecoration: 'underline' }}>Unlink</button>
-    </>
-  )
-}
-
-export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], streak, loadCtx, events = [], plannedWeeks = [], realCurrentWeek = 1, needsPlan, onPlanWeek, onToggle, onBail, onRPE, onDownloadZwo, zwift, doneSessions, totalSessions, daysLeft, strava }) {
+export default function Overview({ user, plan, sessionState = {}, planStart, adaptation, unconfirmed, activities = [], streak, loadCtx, events = [], plannedWeeks = [], realCurrentWeek = 1, needsPlan, onPlanWeek, onToggle, onBail, onRPE, onDownloadZwo, zwift, doneSessions, totalSessions, daysLeft }) {
   // This-week execution — far more relevant than whole-plan totals now.
   const [wkStart, wkEnd] = thisWeekRange()
   const weekSessions = getScheduledSessions(plan, { base: planStart })
@@ -373,8 +317,6 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
 
       <WeekLoadGauge plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} sessionState={sessionState} />
       <TodayCard plan={plan} sessionState={sessionState} planStart={planStart} onToggle={onToggle} onBail={onBail} onDownloadZwo={zwift?.hasFtp ? onDownloadZwo : null} />
-      <StravaCard strava={strava} />
-      <ZwiftCard zwift={zwift} />
 
       {/* This-week progress bar */}
       <div style={{ marginBottom: '1.5rem' }}>
