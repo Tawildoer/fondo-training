@@ -26,6 +26,19 @@ export function downloadZwo(session, ftp, dateLabel = '') {
   return true
 }
 
+// Download a batch of sessions as individual .zwo files (e.g. a whole week for
+// MyWhoosh's web uploader, or any .zwo-compatible platform). Staggered so the
+// browser doesn't drop rapid-fire downloads. items: [{ session, ftp, dateLabel }].
+export function downloadWeekZwos(items = []) {
+  let n = 0
+  items.forEach((it, i) => {
+    if (!it?.session) return
+    setTimeout(() => downloadZwo(it.session, it.ftp, it.dateLabel), i * 400)
+    n++
+  })
+  return n
+}
+
 // ── Tiny IndexedDB key/value (handles are structured-cloneable) ──
 function idb() {
   return new Promise((resolve, reject) => {
