@@ -16,7 +16,7 @@ import AccountMenu from './AccountMenu'
 import { buildSession } from '../lib/weeklyPlanner'
 import { rebalanceForBail } from '../lib/rebalance'
 import { buildZwo } from '../lib/zwo'
-import { downloadZwo, downloadWeekZwos, supportsFolderSync, linkZwiftFolder, loadHandle, forgetHandle, permission as zwiftPermission, writeSessions } from '../lib/zwiftSync'
+import { downloadZwo, supportsFolderSync, linkZwiftFolder, loadHandle, forgetHandle, permission as zwiftPermission, writeSessions } from '../lib/zwiftSync'
 
 // Reconstruct the app-wide plan shape from persisted weekly-planner weeks.
 function buildPlanFromWeeks(weeks) {
@@ -465,17 +465,6 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
     downloadZwo(session, user.ftp, date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }))
   }, [planStart, user.ftp])
 
-  // Download the upcoming week's workouts as .zwo files (for MyWhoosh's uploader
-  // or any .zwo-compatible platform). Reuses the same generator as Zwift.
-  const handleDownloadWeek = useCallback(() => {
-    if (!user.ftp) return 0
-    const today0 = new Date(); today0.setHours(0, 0, 0, 0)
-    const items = getScheduledSessions(plan, { base: planStart })
-      .filter(s => s.session.zone !== 'rest' && s.date >= today0 && s.weekNum <= realCurrentWeek + 1)
-      .map(s => ({ session: s.session, ftp: user.ftp, dateLabel: s.date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }) }))
-    return downloadWeekZwos(items)
-  }, [plan, planStart, realCurrentWeek, user.ftp])
-
   const zwift = {
     supported: supportsFolderSync(),
     linked: !!zwiftDir,
@@ -545,7 +534,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
               <div className="lbl">days left</div>
             </div>
           )}
-          <AccountMenu user={user} authEmail={authEmail} strava={strava} zwift={zwift} onDownloadWeek={handleDownloadWeek} onUpdateProfile={handleUpdateProfile} onUpdateFTP={handleUpdateFTP} onLogout={onLogout} />
+          <AccountMenu user={user} authEmail={authEmail} strava={strava} zwift={zwift} onUpdateProfile={handleUpdateProfile} onUpdateFTP={handleUpdateFTP} onLogout={onLogout} />
         </div>
       </div>
 

@@ -121,11 +121,9 @@ function Row({ icon, color, title, children }) {
   )
 }
 
-function ConnectionsSection({ strava, zwift, onDownloadWeek }) {
+function ConnectionsSection({ strava, zwift }) {
   const muted = { fontSize: 12, color: 'var(--color-text-muted)', lineHeight: 1.5 }
-  const qBtn = { width: 20, height: 20, borderRadius: '50%', border: '1px solid var(--color-border-strong)', background: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', fontSize: 12, fontWeight: 700, lineHeight: 1, flexShrink: 0, fontFamily: 'inherit' }
   const [help, setHelp] = useState(false)
-  const [mwHelp, setMwHelp] = useState(false)
   return (
     <div>
       {/* Strava */}
@@ -194,40 +192,11 @@ function ConnectionsSection({ strava, zwift, onDownloadWeek }) {
           </>
         )}
       </Row>
-
-      {/* MyWhoosh — no official API, but it imports the same .zwo files. */}
-      <Row icon="ti-cloud-upload" color="#00B7C4" title="MyWhoosh">
-        {!zwift?.hasFtp ? (
-          <div style={muted}>Set your FTP (Settings) to generate MyWhoosh workouts.</div>
-        ) : (
-          <>
-            <div style={{ ...muted, marginBottom: 8 }}>
-              MyWhoosh has no auto-sync, but imports the same workout files. Download your week and upload them once in the MyWhoosh builder.
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <button className="btn btn-sm" onClick={() => onDownloadWeek?.()}>
-                <i className="ti ti-download" aria-hidden="true" /> Download this week
-              </button>
-              <a className="btn btn-sm" href="https://workout.mywhoosh.com/" target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                Open builder ↗
-              </a>
-              <button onClick={() => setMwHelp(h => !h)} aria-label="How to upload to MyWhoosh" aria-expanded={mwHelp} style={{ ...qBtn, background: mwHelp ? 'var(--color-surface2)' : 'none' }}>?</button>
-            </div>
-            {mwHelp && (
-              <div style={{ ...muted, marginTop: 8, padding: '8px 10px', background: 'var(--color-surface2)', borderRadius: 'var(--radius-sm)' }}>
-                <div>1. <strong>Download this week</strong> — one <code>.zwo</code> per session.</div>
-                <div style={{ marginTop: 4 }}>2. <strong>Open builder</strong> and sign in to MyWhoosh.</div>
-                <div style={{ marginTop: 4 }}>3. Use its <strong>Upload</strong> button and pick each <code>.zwo</code> — they land in your <strong>MyWorkout</strong> folder. Restart the MyWhoosh game to see new workouts.</div>
-              </div>
-            )}
-          </>
-        )}
-      </Row>
     </div>
   )
 }
 
-export default function AccountMenu({ user, authEmail, strava, zwift, onDownloadWeek, onUpdateProfile, onUpdateFTP, onLogout }) {
+export default function AccountMenu({ user, authEmail, strava, zwift, onUpdateProfile, onUpdateFTP, onLogout }) {
   const [open, setOpen] = useState(false)
   const [section, setSection] = useState('account')
 
@@ -262,7 +231,7 @@ export default function AccountMenu({ user, authEmail, strava, zwift, onDownload
             <div className="drawer-body">
               {section === 'account' && <AccountSection user={user} authEmail={authEmail} onUpdateProfile={onUpdateProfile} onLogout={onLogout} />}
               {section === 'settings' && <SettingsSection user={user} onUpdateProfile={onUpdateProfile} onUpdateFTP={onUpdateFTP} />}
-              {section === 'connections' && <ConnectionsSection strava={strava} zwift={zwift} onDownloadWeek={onDownloadWeek} />}
+              {section === 'connections' && <ConnectionsSection strava={strava} zwift={zwift} />}
             </div>
           </aside>
         </>,
