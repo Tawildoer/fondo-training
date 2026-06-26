@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { getTodaySessions, getScheduledSessions, localDateStr, nextEvent } from '../lib/schedule'
 import { RPE_LABELS } from '../lib/planGenerator'
-import { parseLeadingMinutes } from '../lib/trainingLoad'
-import { weekTss } from '../lib/weeklyPlanner'
+import { parseLeadingMinutes, computeTrainingLoad } from '../lib/trainingLoad'
+import { weekTss, projectLoad } from '../lib/weeklyPlanner'
 import { WeekCoach, LastRideCoach } from './Coach'
+import { GreetingHero, WeekStrip, FitnessMomentum, EventReadiness, ConsistencyHeatmap } from './OverviewWidgets'
 
 // Where the current week stands against its load budget. Makes a bail's
 // consequence visible — and shows the gap closing after an auto-rebalance.
@@ -261,15 +262,7 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
   const plannedHrs = Math.round(weekSessions.reduce((a, s) => a + parseLeadingMinutes(s.session.desc), 0) / 60 * 10) / 10
   const doneHrs = Math.round(weekSessions.filter(isDone).reduce((a, s) => a + parseLeadingMinutes(s.session.desc), 0) / 60 * 10) / 10
 
-  // Progress bar counts the whole week including rest days. A rest day
-  // auto-completes once it's reached (resting on a rest day *is* sticking to the
-  // plan) — but a rest day still in the future doesn't count yet.
   const today0 = new Date(); today0.setHours(0, 0, 0, 0)
-  const weekAll = getScheduledSessions(plan, { includeRest: true, base: planStart })
-    .filter(s => s.date >= wkStart && s.date <= wkEnd)
-  const isComplete = s => (s.session.zone === 'rest' ? s.date <= today0 : isDone(s))
-  const barPlanned = weekAll.length
-  const weekPct = barPlanned ? Math.round((weekAll.filter(isComplete).length / barPlanned) * 100) : 0
 
   // Trailing 7 days (rolling) feed the coach — a rolling window avoids the
   // Monday calendar reset and reflects true recent training.
@@ -302,11 +295,24 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
         .find(s => localDateStr(s.date) === latestRide.start_date.slice(0, 10))?.session || null)
     : null
 
+  // Training-load history (CTL/TSB series) + forward projection, for the
+  // momentum, heatmap and event-readiness widgets.
+  const tl = useMemo(
+    () => computeTrainingLoad(plan, sessionState, activities, user, planStart),
+    [plan, sessionState, activities, user, planStart]
+  )
+  const projection = useMemo(
+    () => projectLoad({ currentCtl: tl.current.ctl, recentWeeklyTss: loadCtx?.recentWeeklyTss || 0, planStart, currentWeekNum: realCurrentWeek, events, user, plannedWeeks }),
+    [tl.current.ctl, loadCtx, planStart, realCurrentWeek, events, user, plannedWeeks]
+  )
+
   return (
     <div>
       {needsPlan && <PlanWeekCTA onPlanWeek={onPlanWeek} />}
       <CatchUpCard unconfirmed={unconfirmed} onToggle={onToggle} onBail={onBail} onRPE={onRPE} />
       <AdaptationBanner adaptation={adaptation} />
+
+      <GreetingHero name={user.name} tsb={tl.hasData ? tl.current.tsb : null} />
 
       <div className="stats-grid">
         <div className="stat-card"><div className="val">{user.ftp ? user.ftp + 'W' : '—'}</div><div className="lbl">FTP</div></div>
@@ -315,18 +321,17 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
         <div className="stat-card"><div className="val">{loadCtx?.currentCtl || '—'}</div><div className="lbl">Fitness (CTL)</div></div>
       </div>
 
-      <WeekLoadGauge plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} sessionState={sessionState} />
       <TodayCard plan={plan} sessionState={sessionState} planStart={planStart} onToggle={onToggle} onBail={onBail} onDownloadZwo={zwift?.hasFtp ? onDownloadZwo : null} />
 
-      {/* This-week progress bar */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
-          <span>This week</span><span>{plannedThisWeek ? `${weekPct}%` : 'Not planned yet'}</span>
-        </div>
-        <div className="progress-track">
-          <div className="progress-fill" style={{ width: `${weekPct}%` }} />
-        </div>
+      <WeekLoadGauge plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} sessionState={sessionState} />
+      <WeekStrip plan={plan} sessionState={sessionState} planStart={planStart} />
+
+      <div className="ov-cols">
+        <FitnessMomentum series={tl.series} current={tl.hasData ? tl.current : null} />
+        <EventReadiness event={coachEvent} daysLeft={daysLeft} currentCtl={tl.current?.ctl || 0} projection={projection} />
       </div>
+
+      <ConsistencyHeatmap series={tl.series} />
 
       {/* At-a-glance coach nudges; deeper charts live in the Analytics tab. */}
       <div className="ov-cols">

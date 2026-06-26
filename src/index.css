@@ -436,6 +436,23 @@ img, svg, video, canvas { max-width: 100%; }
 .sess-z3 { background: var(--zone-z3-bg); color: var(--zone-z3-fg); }
 .sess-z4 { background: var(--zone-z4-bg); color: var(--zone-z4-fg); }
 .sess-z5 { background: var(--zone-z5-bg); color: var(--zone-z5-fg); }
+
+/* ── Overview week strip + consistency heatmap ───────────── */
+.wk-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.wk-day { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.wk-dow { font-size: 10px; font-weight: 700; color: var(--color-text-faint); }
+.wk-num { font-size: 10px; color: var(--color-text-muted); }
+.wk-block {
+  width: 100%; aspect-ratio: 1 / 1; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700;
+}
+.wk-block.rest { background: var(--color-surface2); }
+.wk-day.today .wk-block { box-shadow: 0 0 0 2px var(--color-electric); }
+.wk-day.today .wk-dow { color: var(--color-electric); }
+
+.heatmap { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 15px); grid-auto-columns: 15px; gap: 3px; }
+.heat-cell { width: 15px; height: 15px; border-radius: 3px; }
 .sess-rest { background: var(--color-surface2); color: var(--color-text-muted); }
 
 /* ── Tags ── */
