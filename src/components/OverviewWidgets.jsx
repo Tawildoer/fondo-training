@@ -126,7 +126,7 @@ export function ConsistencyHeatmap({ series = [] }) {
         <h2 style={{ margin: 0 }}>Consistency</h2>
         <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>{WEEKS}w · by load</span>
       </div>
-      <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
         <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 16px)', gap: 3, fontSize: 9, color: 'var(--color-text-faint)' }}>
           {rowLabels.map((l, i) => <div key={i} style={{ lineHeight: '16px' }}>{l}</div>)}
         </div>
