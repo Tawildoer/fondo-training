@@ -2,9 +2,9 @@ import { useState, useMemo } from 'react'
 import { getTodaySessions, getScheduledSessions, localDateStr, nextEvent } from '../lib/schedule'
 import { RPE_LABELS } from '../lib/planGenerator'
 import { parseLeadingMinutes, computeTrainingLoad } from '../lib/trainingLoad'
-import { weekTss, projectLoad } from '../lib/weeklyPlanner'
+import { weekTss } from '../lib/weeklyPlanner'
 import { WeekCoach, LastRideCoach } from './Coach'
-import { GreetingHero, WeekStrip, FitnessMomentum, EventReadiness, ConsistencyHeatmap } from './OverviewWidgets'
+import { GreetingHero, WeekStrip, ConsistencyHeatmap } from './OverviewWidgets'
 
 // Where the current week stands against its load budget. Makes a bail's
 // consequence visible — and shows the gap closing after an auto-rebalance.
@@ -295,15 +295,11 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
         .find(s => localDateStr(s.date) === latestRide.start_date.slice(0, 10))?.session || null)
     : null
 
-  // Training-load history (CTL/TSB series) + forward projection, for the
-  // momentum, heatmap and event-readiness widgets.
+  // Training-load history (CTL/TSB series) for the greeting's form status and
+  // the consistency heatmap.
   const tl = useMemo(
     () => computeTrainingLoad(plan, sessionState, activities, user, planStart),
     [plan, sessionState, activities, user, planStart]
-  )
-  const projection = useMemo(
-    () => projectLoad({ currentCtl: tl.current.ctl, recentWeeklyTss: loadCtx?.recentWeeklyTss || 0, planStart, currentWeekNum: realCurrentWeek, events, user, plannedWeeks }),
-    [tl.current.ctl, loadCtx, planStart, realCurrentWeek, events, user, plannedWeeks]
   )
 
   return (
@@ -325,11 +321,6 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
 
       <WeekLoadGauge plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} sessionState={sessionState} />
       <WeekStrip plan={plan} sessionState={sessionState} planStart={planStart} />
-
-      <div className="ov-cols">
-        <FitnessMomentum series={tl.series} current={tl.hasData ? tl.current : null} />
-        <EventReadiness event={coachEvent} daysLeft={daysLeft} currentCtl={tl.current?.ctl || 0} projection={projection} />
-      </div>
 
       <ConsistencyHeatmap series={tl.series} />
 
