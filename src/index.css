@@ -451,8 +451,8 @@ img, svg, video, canvas { max-width: 100%; }
 .wk-day.today .wk-block { box-shadow: 0 0 0 2px var(--color-electric); }
 .wk-day.today .wk-dow { color: var(--color-electric); }
 
-.heatmap { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 15px); grid-auto-columns: 15px; gap: 3px; }
-.heat-cell { width: 15px; height: 15px; border-radius: 3px; }
+.heatmap { display: grid; gap: 4px; width: 100%; }
+.heat-cell { aspect-ratio: 1 / 1; border-radius: 3px; min-width: 0; }
 .sess-rest { background: var(--color-surface2); color: var(--color-text-muted); }
 
 /* ── Tags ── */

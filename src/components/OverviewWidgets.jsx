@@ -106,9 +106,10 @@ export function ConsistencyHeatmap({ series = [] }) {
   series.forEach(s => { loadByKey[localDateStr(s.date)] = s.load })
   const maxLoad = Math.max(60, ...series.map(s => s.load))
 
+  // Day-major (rows = Mon→Sun, columns = weeks) so the grid fills the card width.
   const cells = []
-  for (let w = 0; w < WEEKS; w++) {
-    for (let d = 0; d < 7; d++) {
+  for (let d = 0; d < 7; d++) {
+    for (let w = 0; w < WEEKS; w++) {
       const day = new Date(start); day.setDate(start.getDate() + w * 7 + d)
       cells.push({ day, load: loadByKey[localDateStr(day)] || 0, future: day > today })
     }
@@ -118,7 +119,7 @@ export function ConsistencyHeatmap({ series = [] }) {
     const t = Math.min(1, load / maxLoad)
     return `color-mix(in srgb, var(--color-accent) ${Math.round(18 + t * 82)}%, var(--color-surface2))`
   }
-  const rowLabels = ['Mon', '', 'Wed', '', 'Fri', '', 'Sun']
+  const swatch = bg => ({ width: 11, height: 11, borderRadius: 3, background: bg, display: 'inline-block' })
 
   return (
     <div className="card wgt-2">
@@ -126,20 +127,23 @@ export function ConsistencyHeatmap({ series = [] }) {
         <h2 style={{ margin: 0 }}>Consistency</h2>
         <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>{WEEKS}w · by load</span>
       </div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-        <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 16px)', gap: 3, fontSize: 9, color: 'var(--color-text-faint)' }}>
-          {rowLabels.map((l, i) => <div key={i} style={{ lineHeight: '16px' }}>{l}</div>)}
-        </div>
-        <div className="heatmap">
-          {cells.map((c, i) => (
-            <div
-              key={i}
-              className="heat-cell"
-              title={`${c.day.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}${c.load ? ` · ${c.load} TSS` : ''}`}
-              style={{ background: c.future ? 'transparent' : shade(c.load), border: c.future ? '1px dashed var(--color-border)' : 'none' }}
-            />
-          ))}
-        </div>
+      <div className="heatmap" style={{ gridTemplateColumns: `repeat(${WEEKS}, 1fr)` }}>
+        {cells.map((c, i) => (
+          <div
+            key={i}
+            className="heat-cell"
+            title={`${c.day.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}${c.load ? ` · ${c.load} TSS` : ''}`}
+            style={{ background: c.future ? 'transparent' : shade(c.load), border: c.future ? '1px dashed var(--color-border)' : 'none' }}
+          />
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, fontSize: 10, color: 'var(--color-text-faint)' }}>
+        <span>Less</span>
+        <span style={swatch('var(--color-surface2)')} />
+        <span style={swatch('color-mix(in srgb, var(--color-accent) 45%, var(--color-surface2))')} />
+        <span style={swatch('color-mix(in srgb, var(--color-accent) 75%, var(--color-surface2))')} />
+        <span style={swatch('var(--color-accent)')} />
+        <span>More</span>
       </div>
     </div>
   )
