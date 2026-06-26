@@ -4,7 +4,7 @@ import { RPE_LABELS } from '../lib/planGenerator'
 import { parseLeadingMinutes, computeTrainingLoad } from '../lib/trainingLoad'
 import { weekTss } from '../lib/weeklyPlanner'
 import { WeekCoach, LastRideCoach } from './Coach'
-import { GreetingHero, WeekStrip, ConsistencyHeatmap } from './OverviewWidgets'
+import { GreetingHero, WeekStrip, ConsistencyHeatmap, RecentRides } from './OverviewWidgets'
 
 // Where the current week stands against its load budget. Makes a bail's
 // consequence visible — and shows the gap closing after an auto-rebalance.
@@ -322,7 +322,10 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
       <WeekLoadGauge plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} sessionState={sessionState} />
       <WeekStrip plan={plan} sessionState={sessionState} planStart={planStart} />
 
-      <ConsistencyHeatmap series={tl.series} />
+      <div className="ov-cols">
+        <ConsistencyHeatmap series={tl.series} />
+        <RecentRides activities={activities} ftp={user.ftp} maxHr={user.max_hr} />
+      </div>
 
       {/* At-a-glance coach nudges; deeper charts live in the Analytics tab. */}
       <div className="ov-cols">

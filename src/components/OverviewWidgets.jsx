@@ -3,6 +3,7 @@
 // rather than decorate. Kept here to keep Overview itself a clean composition.
 
 import { getScheduledSessions, localDateStr } from '../lib/schedule'
+import { estActivityTSS } from '../lib/trainingLoad'
 
 // Form (TSB) bands — mirrors Analytics' thresholds.
 function formMeta(tsb) {
@@ -95,7 +96,7 @@ export function ConsistencyHeatmap({ series = [] }) {
       </div>
     )
   }
-  const WEEKS = 10
+  const WEEKS = 13
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const dow = today.getDay()
   const thisMon = new Date(today); thisMon.setDate(today.getDate() + (dow === 0 ? -6 : 1 - dow))
@@ -120,14 +121,14 @@ export function ConsistencyHeatmap({ series = [] }) {
   const rowLabels = ['Mon', '', 'Wed', '', 'Fri', '', 'Sun']
 
   return (
-    <div className="card" style={{ marginBottom: '1.5rem' }}>
+    <div className="card wgt-2">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
         <h2 style={{ margin: 0 }}>Consistency</h2>
-        <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>last {WEEKS} weeks · shaded by load</span>
+        <span style={{ fontSize: 11, color: 'var(--color-text-faint)' }}>{WEEKS}w · by load</span>
       </div>
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
-        <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 15px)', gap: 3, fontSize: 9, color: 'var(--color-text-faint)' }}>
-          {rowLabels.map((l, i) => <div key={i} style={{ lineHeight: '15px' }}>{l}</div>)}
+        <div style={{ display: 'grid', gridTemplateRows: 'repeat(7, 16px)', gap: 3, fontSize: 9, color: 'var(--color-text-faint)' }}>
+          {rowLabels.map((l, i) => <div key={i} style={{ lineHeight: '16px' }}>{l}</div>)}
         </div>
         <div className="heatmap">
           {cells.map((c, i) => (
@@ -140,6 +141,55 @@ export function ConsistencyHeatmap({ series = [] }) {
           ))}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Recent rides (last 3 synced activities) ──────────────────
+function fmtDur(s) {
+  const m = Math.round((s || 0) / 60)
+  return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`
+}
+export function RecentRides({ activities = [], ftp, maxHr }) {
+  const rides = [...activities]
+    .filter(a => a.start_date)
+    .sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
+    .slice(0, 3)
+
+  return (
+    <div className="card wgt-2">
+      <h2>Recent rides</h2>
+      {rides.length === 0 ? (
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
+          Connect Strava (Menu → Connections) and your latest rides show up here.
+        </p>
+      ) : (
+        <div>
+          {rides.map((a, i) => {
+            const d = new Date(a.start_date)
+            const tss = estActivityTSS(a, ftp, maxHr)
+            const km = a.distance_m ? (a.distance_m / 1000).toFixed(a.distance_m >= 100000 ? 0 : 1) : null
+            const np = a.weighted_avg_watts || a.avg_watts
+            return (
+              <div key={a.id || i} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 0', borderTop: i ? '0.5px solid var(--color-border)' : 'none' }}>
+                <div style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--color-surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--color-accent-text)' }}>
+                  <i className="ti ti-bike" style={{ fontSize: 17 }} aria-hidden="true" />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name || 'Ride'}</div>
+                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                    {d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })} · {fmtDur(a.moving_time_s)}{km ? ` · ${km} km` : ''}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em' }}>{tss > 0 ? tss : (np ? Math.round(np) : '—')}</div>
+                  <div style={{ fontSize: 10, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{tss > 0 ? 'TSS' : (np ? 'W avg' : '')}</div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
