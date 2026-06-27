@@ -457,8 +457,11 @@ function SessionList({ sessions, ftp, editable, onEdit }) {
         <div key={i} className={`sess-${s.zone}`} style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: s.zone === 'rest' ? 0 : 4, flexWrap: 'wrap' }}>
             <span style={{ width: 34, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.6 }}>{s.day}</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</span>
-            {s.zone !== 'rest' && <span className="tag" style={{ marginLeft: 'auto' }}>{ZONE_LABEL[s.zone]}</span>}
+            <span style={{ fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              {(s.sport && s.sport !== 'bike') && <i className={`ti ${SPORTS[s.sport]?.icon || ''}`} aria-hidden="true" />}
+              {s.name}
+            </span>
+            {s.zone !== 'rest' && <span className="tag" style={{ marginLeft: 'auto' }}>{s.sport === 'brick' ? 'Brick' : ZONE_LABEL[s.zone]}</span>}
           </div>
           {s.zone !== 'rest' && <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{s.desc}</div>}
           {editable && (

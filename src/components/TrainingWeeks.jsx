@@ -1,9 +1,21 @@
 import { useState } from 'react'
-import { RPE_LABELS, getZoneWatts } from '../lib/planGenerator'
+import { RPE_LABELS, getZoneWatts, getRunPace, getSwimPace, fmtPace } from '../lib/planGenerator'
 import { getSessionDate } from '../lib/schedule'
 import { matchActivityToDate } from '../lib/strava'
-import { ZONE_OPTIONS, ZONE_META, buildWorkout, buildStrength } from '../lib/weeklyPlanner'
+import { ZONE_OPTIONS, ZONE_META, buildWorkout, buildStrength, buildSwimSets } from '../lib/weeklyPlanner'
+import { SPORTS, sessionSport } from '../lib/sports'
 import ActivityDetail from './ActivityDetail'
+
+// A small discipline chip (icon + label) for non-bike session cards.
+function SportTag({ sport }) {
+  const m = SPORTS[sport]
+  if (!m || sport === 'bike') return null
+  return (
+    <span className="tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <i className={`ti ${m.icon}`} style={{ fontSize: 12 }} aria-hidden="true" /> {m.label}
+    </span>
+  )
+}
 
 const fmtMin = m => (m >= 90 ? `${Math.round(m / 30) * 30 / 60} hr` : `${m} min`)
 
@@ -73,11 +85,17 @@ const ZONE_INDEX = { z1: 0, z2: 1, z3: 2, z4: 3, z5: 4 }
 
 // Concrete power + heart-rate bands to hold on a steady (non-interval) ride, so
 // an expanded Z2 endurance day shows what to actually aim at, not just prose.
-function SteadyTargets({ zone, ftp, maxHr }) {
-  const watts = ftp ? getZoneWatts(zone.toUpperCase(), ftp) : null
+// Concrete targets for a steady (non-interval) effort, per sport: watts (bike),
+// pace/km (run) or pace/100m (swim) when the threshold is set, with the HR band
+// shown for every sport so there's always a target even without pace/power.
+function SteadyTargets({ zone, sport = 'bike', ftp, maxHr, thresholdPaceRun, cssSwim }) {
+  const Z = zone.toUpperCase()
+  const watts = sport === 'bike' && ftp ? getZoneWatts(Z, ftp) : null
+  const runP = sport === 'run' ? getRunPace(Z, thresholdPaceRun) : null
+  const swimP = sport === 'swim' ? getSwimPace(Z, cssSwim) : null
   const hr = HR_ZONE_FACTORS[ZONE_INDEX[zone]]
   const bpm = maxHr && hr ? `${Math.round(hr[0] * maxHr)}–${Math.round(hr[1] * maxHr)} bpm` : null
-  if (!watts && !bpm) return null
+  if (!watts && !runP && !swimP && !bpm) return null
   const Cell = ({ label, value }) => (
     <div>
       <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.6 }}>{label}</div>
@@ -87,6 +105,8 @@ function SteadyTargets({ zone, ftp, maxHr }) {
   return (
     <div style={{ marginTop: 10, display: 'flex', gap: 22, flexWrap: 'wrap' }}>
       {watts && <Cell label="Power" value={`${watts.lo}–${watts.hi} W`} />}
+      {runP && <Cell label="Pace" value={`${fmtPace(runP.fast)}–${fmtPace(runP.slow)} /km`} />}
+      {swimP && <Cell label="Pace" value={`${fmtPace(swimP.fast)}–${fmtPace(swimP.slow)} /100m`} />}
       {bpm && <Cell label="Heart rate" value={bpm} />}
     </div>
   )
@@ -117,13 +137,12 @@ function IntervalProfile({ segments }) {
   )
 }
 
-// Expanded strength session: warm-up → main lifts → accessory → core →
-// cool-down, each move with its sets×reps. Mirrors buildStrength's structure.
-function StrengthDetail({ session }) {
-  const plan = buildStrength(session.durationMin)
+// Generic block prescription (warm-up → main → … → cool-down), each item with
+// a name + detail (+ optional note). Shared by strength, swim and brick details.
+function BlockDetail({ blocks }) {
   return (
     <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {plan.blocks.map(block => (
+      {blocks.map(block => (
         <div key={block.kind}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.6, marginBottom: 5 }}>
             {block.label}
@@ -133,7 +152,7 @@ function StrengthDetail({ session }) {
               <div key={i}>
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>{it.name}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', opacity: 0.85 }}>{it.detail}</span>
+                  {it.detail && <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', opacity: 0.85 }}>{it.detail}</span>}
                 </div>
                 {it.note && <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.4, marginTop: 1 }}>{it.note}</div>}
               </div>
@@ -142,6 +161,29 @@ function StrengthDetail({ session }) {
         </div>
       ))}
     </div>
+  )
+}
+
+// Expanded strength session: warm-up → main lifts → accessory → core → cool-down.
+const StrengthDetail = ({ session }) => <BlockDetail blocks={buildStrength(session.durationMin).blocks} />
+// Expanded swim session: warm-up → main set → cool-down.
+const SwimDetail = ({ session }) => <BlockDetail blocks={buildSwimSets(session.zone, session.durationMin).blocks} />
+
+// Expanded brick: the two back-to-back legs (bike then run) with their targets.
+function BrickDetail({ session, user }) {
+  const legs = session.legs || []
+  const blocks = legs.map((leg, i) => ({
+    kind: `leg${i}`,
+    label: `${i + 1}. ${SPORTS[leg.sport]?.label || leg.sport} · ${fmtMin(leg.durationMin)}`,
+    items: [{ name: leg.desc || `${leg.zone.toUpperCase()} effort`, detail: '' }],
+  }))
+  return (
+    <>
+      <BlockDetail blocks={blocks} />
+      <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.4, marginTop: 8 }}>
+        Transition straight from the bike to the run — quick shoes change, no rest.
+      </div>
+    </>
   )
 }
 
@@ -271,13 +313,20 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                     const key = `w${week.num}_${idx}`
                     const state = sessionState[key] || {}
                     const isRest = session.zone === 'rest'
+                    const sport = sessionSport(session)
                     const bailed = !!state.bailed && !isRest
                     const matchedActivity = isRest ? null : matchActivityToDate(activities, getSessionDate(week.num, session, idx, planStart))
                     // Every non-rest session is a thin card that opens to its
                     // richer detail; interval sessions also get a workout profile.
                     const expandable = !isRest
-                    const structured = expandable && ['z3', 'z4', 'z5'].includes(session.zone) && session.durationMin != null
-                    const wk = structured ? buildWorkout(session.zone, session.durationMin, user?.ftp) : null
+                    // Interval profiles apply to bike & run quality sessions; swim,
+                    // brick and strength render their own block prescriptions.
+                    const structured = expandable && (sport === 'bike' || sport === 'run') &&
+                      ['z3', 'z4', 'z5'].includes(session.zone) && session.durationMin != null
+                    const wk = structured
+                      ? buildWorkout(session.zone, session.durationMin, user?.ftp,
+                          { sport, thresholdPaceRun: user?.threshold_pace_run, cssSwim: user?.css_swim })
+                      : null
                     const detailOpen = expandable && openDetails.has(key)
                     // The whole card toggles the detail; action controls below
                     // stopPropagation so they don't also expand/collapse.
@@ -308,6 +357,9 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                               <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.6 }}>
                                 {session.day}
                               </span>
+                              {sport !== 'bike' && !isRest && (
+                                <i className={`ti ${SPORTS[sport]?.icon || ''}`} style={{ fontSize: 14, opacity: 0.85 }} aria-hidden="true" title={SPORTS[sport]?.label} />
+                              )}
                               <span style={{ fontSize: 13, fontWeight: 600 }}>
                                 {(state.completed || bailed) && !isRest
                                   ? <span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{session.name}</span>
@@ -339,8 +391,13 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                   </div>
                                 ) : session.zone === 'strength' ? (
                                   <StrengthDetail session={session} />
+                                ) : sport === 'swim' ? (
+                                  <SwimDetail session={session} />
+                                ) : sport === 'brick' ? (
+                                  <BrickDetail session={session} user={user} />
                                 ) : (
-                                  <SteadyTargets zone={session.zone} ftp={user?.ftp} maxHr={user?.max_hr} />
+                                  <SteadyTargets zone={session.zone} sport={sport} ftp={user?.ftp} maxHr={user?.max_hr}
+                                    thresholdPaceRun={user?.threshold_pace_run} cssSwim={user?.css_swim} />
                                 )}
 
                                 {!state.completed && (
@@ -374,7 +431,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                     {editKey === `${week.num}_${idx}` ? ' Done editing' : ' Edit session'}
                                   </button>
                                 )}
-                                {onDownloadZwo && user?.ftp && session.zone !== 'strength' && (
+                                {onDownloadZwo && user?.ftp && sport === 'bike' && (
                                   <button
                                     onClick={e => { stop(e); onDownloadZwo(session, week.num, idx) }}
                                     style={{

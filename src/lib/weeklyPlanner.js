@@ -8,7 +8,7 @@
 // Output sessions match the app-wide plan shape so every downstream feature
 // (calendar, streak, training load, Strava auto-complete) just works.
 
-import { getZoneLabel } from './planGenerator'
+import { getZoneLabel, getRunPace, getSwimPace, fmtPace } from './planGenerator'
 import { nextEvent, prevEvent, parseLocalDate, localDateStr } from './schedule'
 import { eventSport } from './sports'
 
@@ -328,9 +328,21 @@ const WORKOUT_SCHEME = {
 }
 const STEADY_PCT = { z1: 0.50, z2: 0.65 }
 
-export function buildWorkout(zone, totalMin, ftp) {
+// The headline target for a workout: watts (bike), pace/km (run) or pace/100m
+// (swim) when the threshold is known, else just the zone name. `opts` carries
+// the sport + per-sport thresholds; defaulting to bike keeps every existing
+// caller (and the .zwo export) unchanged.
+export function workoutTarget(zone, ftp, opts = {}) {
+  const Z = zone.toUpperCase()
+  const { sport = 'bike', thresholdPaceRun, cssSwim } = opts
+  if (sport === 'run') { const p = getRunPace(Z, thresholdPaceRun); return p ? `${fmtPace(p.fast)}–${fmtPace(p.slow)}/km` : Z }
+  if (sport === 'swim') { const p = getSwimPace(Z, cssSwim); return p ? `${fmtPace(p.fast)}–${fmtPace(p.slow)}/100m` : Z }
+  return ftp ? getZoneLabel(Z, ftp) : Z
+}
+
+export function buildWorkout(zone, totalMin, ftp, opts = {}) {
   const total = Math.max(20, Math.round(totalMin || 60))
-  const target = ftp ? getZoneLabel(zone.toUpperCase(), ftp) : zone.toUpperCase()
+  const target = workoutTarget(zone, ftp, opts)
 
   // Steady rides: one flat block, no interval breakdown.
   if (!WORKOUT_SCHEME[zone]) {
@@ -405,6 +417,35 @@ export function buildStrength(totalMin) {
       { kind: 'core', label: 'Core', items: core.slice(0, nCore) },
       { kind: 'cooldown', label: 'Cool-down · ~5 min', items: [
         { name: 'Quad + hip-flexor stretch', detail: '5 min' },
+      ] },
+    ],
+  }
+}
+
+// Expand a swim session into a warm-up → main set → cool-down prescription,
+// the swimmer's analogue of buildWorkout. Rounds scale with the time you set;
+// the main set's shape comes from the effort zone. Distances are pool-friendly.
+export function buildSwimSets(zone, totalMin) {
+  const total = clamp(Math.round(totalMin || 45), 20, 90)
+  const rounds = total >= 60 ? 6 : total >= 40 ? 5 : 4
+  const main = {
+    z1: { name: `${rounds} × 100 m easy`, detail: 'smooth, 20 s rest', note: 'Technique focus — long, relaxed strokes.' },
+    z2: { name: `${rounds} × 200 m steady`, detail: '20 s rest', note: 'Aerobic endurance, even splits.' },
+    z3: { name: `${rounds} × 150 m tempo`, detail: '20 s rest', note: 'Comfortably hard, hold form.' },
+    z4: { name: `${rounds + 1} × 100 m @ threshold (CSS)`, detail: '15 s rest', note: 'Race-pace effort, strong and controlled.' },
+    z5: { name: `${rounds + 2} × 50 m fast`, detail: 'full rest', note: 'Sprint speed, full recovery between.' },
+  }[zone] || { name: `${rounds} × 200 m steady`, detail: '20 s rest' }
+  return {
+    total,
+    summary: main.name,
+    blocks: [
+      { kind: 'warmup', label: 'Warm-up', items: [
+        { name: '200–300 m easy swim', detail: 'mixed stroke' },
+        { name: '4 × 50 m drills', detail: '15 s rest' },
+      ] },
+      { kind: 'main', label: 'Main set', items: [main] },
+      { kind: 'cooldown', label: 'Cool-down', items: [
+        { name: '100–200 m easy', detail: 'loosen down' },
       ] },
     ],
   }

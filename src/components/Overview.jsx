@@ -3,8 +3,16 @@ import { getTodaySessions, getScheduledSessions, localDateStr, nextEvent } from 
 import { RPE_LABELS } from '../lib/planGenerator'
 import { parseLeadingMinutes, computeTrainingLoad } from '../lib/trainingLoad'
 import { weekTss } from '../lib/weeklyPlanner'
+import { SPORTS, sessionSport } from '../lib/sports'
 import { WeekCoach, LastRideCoach } from './Coach'
 import { GreetingHero, WeekStrip, ConsistencyHeatmap, RecentRides } from './OverviewWidgets'
+
+// Small leading discipline icon for non-bike session cards.
+function SportIcon({ session }) {
+  const sport = sessionSport(session)
+  if (sport === 'bike' || session?.zone === 'rest') return null
+  return <i className={`ti ${SPORTS[sport]?.icon || ''}`} style={{ fontSize: 13, opacity: 0.85, marginRight: 4 }} aria-hidden="true" title={SPORTS[sport]?.label} />
+}
 
 // Where the current week stands against its load budget. Makes a bail's
 // consequence visible — and shows the gap closing after an auto-rebalance.
@@ -90,7 +98,7 @@ function CatchUpCard({ unconfirmed, onToggle, onBail, onRPE }) {
                 <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.6 }}>
                   {date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })}
                 </span>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{session.name}</span>
+                <span style={{ fontSize: 13, fontWeight: 600 }}><SportIcon session={session} />{session.name}</span>
               </div>
               <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85, marginBottom: 10 }}>{session.desc}</div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -203,8 +211,8 @@ function TodayCard({ plan, sessionState, planStart, onToggle, onBail, onDownload
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   {(state.completed || bailed) && !isRest
-                    ? <span style={{ textDecoration: 'line-through', opacity: 0.55 }}>{session.name}</span>
-                    : session.name}
+                    ? <span style={{ textDecoration: 'line-through', opacity: 0.55 }}><SportIcon session={session} />{session.name}</span>
+                    : <span><SportIcon session={session} />{session.name}</span>}
                   {bailed && (
                     <span className="tag" style={{ background: 'var(--color-red-light)', color: 'var(--color-red-text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                       <i className="ti ti-circle-x" style={{ fontSize: 12 }} aria-hidden="true" /> Missed
@@ -228,7 +236,7 @@ function TodayCard({ plan, sessionState, planStart, onToggle, onBail, onDownload
                       : <><i className="ti ti-circle-x" style={{ fontSize: 13 }} aria-hidden="true" /> Bail</>}
                   </button>
                 )}
-                {!isRest && session.zone !== 'strength' && onDownloadZwo && (
+                {!isRest && sessionSport(session) === 'bike' && session.zone !== 'strength' && onDownloadZwo && (
                   <button
                     onClick={() => onDownloadZwo(session, weekNum, idx)}
                     style={{
