@@ -315,7 +315,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                     const isRest = session.zone === 'rest'
                     const sport = sessionSport(session)
                     const bailed = !!state.bailed && !isRest
-                    const matchedActivity = isRest ? null : matchActivityToDate(activities, getSessionDate(week.num, session, idx, planStart))
+                    const matchedActivity = isRest ? null : matchActivityToDate(activities, getSessionDate(week.num, session, idx, planStart), sport)
                     // Every non-rest session is a thin card that opens to its
                     // richer detail; interval sessions also get a workout profile.
                     const expandable = !isRest

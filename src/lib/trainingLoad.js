@@ -32,14 +32,41 @@ export function parseLeadingMinutes(desc) {
   return 0
 }
 
-// Real TSS for a synced ride. Power-based when watts + FTP are available,
-// otherwise HR-based, otherwise a steady-endurance estimate from duration.
-export function estActivityTSS(activity, ftp, maxHr) {
-  const durH = (activity.moving_time_s || activity.elapsed_time_s || 0) / 3600
+// Normalise a Strava activity's sport_type/type into our discipline buckets.
+export function activitySport(activity) {
+  const t = (activity?.sport_type || activity?.type || '').toLowerCase()
+  if (t.includes('swim')) return 'swim'
+  if (t.includes('run')) return 'run'
+  return 'bike' // ride / virtualride / gravelride / mountainbikeride / …
+}
+
+// Real TSS for a synced activity, by the best signal for its sport:
+//   bike → power (NP/FTP); run → pace vs threshold pace; swim → pace vs CSS;
+// then a HR-based estimate, then a steady-effort fallback. `opts` carries the
+// run/swim thresholds; without them run/swim fall back to HR/effort.
+export function estActivityTSS(activity, ftp, maxHr, opts = {}) {
+  const movingS = activity.moving_time_s || activity.elapsed_time_s || 0
+  const durH = movingS / 3600
   if (durH <= 0) return 0
+  const sport = activitySport(activity)
+  const km = activity.distance_m ? activity.distance_m / 1000 : 0
+
+  // Bike: power-based when watts + FTP are available.
   const np = activity.weighted_avg_watts || activity.avg_watts
-  if (np && ftp) {
+  if (sport === 'bike' && np && ftp) {
     const IF = np / ftp
+    return Math.round(durH * IF * IF * 100)
+  }
+  // Run: pace-based rTSS — actual pace vs threshold pace (sec/km).
+  if (sport === 'run' && opts.thresholdPaceRun && km > 0) {
+    const paceSecPerKm = movingS / km
+    const IF = Math.min(1.15, Math.max(0.4, opts.thresholdPaceRun / paceSecPerKm))
+    return Math.round(durH * IF * IF * 100)
+  }
+  // Swim: pace per 100m vs CSS.
+  if (sport === 'swim' && opts.cssSwim && km > 0) {
+    const pace100 = movingS / (km * 10)
+    const IF = Math.min(1.1, Math.max(0.4, opts.cssSwim / pace100))
     return Math.round(durH * IF * IF * 100)
   }
   if (activity.avg_hr && maxHr) {
@@ -76,13 +103,14 @@ export function estSessionLoad(session, state) {
 export function computeTrainingLoad(plan, sessionState, activities, user, planStart, base = new Date()) {
   const ftp = user?.ftp
   const maxHr = user?.max_hr
+  const paceOpts = { thresholdPaceRun: user?.threshold_pace_run, cssSwim: user?.css_swim }
 
-  // 1. Real load from synced rides, bucketed by local day.
+  // 1. Real load from every synced activity (bike/run/swim), bucketed by day.
   const rideByDay = {}
   ;(activities || []).forEach(a => {
     if (!a.start_date) return
     const k = localDateStr(new Date(a.start_date))
-    rideByDay[k] = (rideByDay[k] || 0) + estActivityTSS(a, ftp, maxHr)
+    rideByDay[k] = (rideByDay[k] || 0) + estActivityTSS(a, ftp, maxHr, paceOpts)
   })
 
   // 2. Planned estimate for completed sessions (fallback per day).

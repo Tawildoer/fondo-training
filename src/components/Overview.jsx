@@ -332,7 +332,7 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
 
       <div className="ov-cols">
         <ConsistencyHeatmap series={tl.series} />
-        <RecentRides activities={activities} ftp={user.ftp} maxHr={user.max_hr} />
+        <RecentRides activities={activities} ftp={user.ftp} maxHr={user.max_hr} thresholdPaceRun={user.threshold_pace_run} cssSwim={user.css_swim} />
       </div>
 
       {/* At-a-glance coach nudges; deeper charts live in the Analytics tab. */}

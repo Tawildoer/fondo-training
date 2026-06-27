@@ -1,5 +1,7 @@
 import { supabase } from './supabase'
 import { getScheduledSessions } from './schedule'
+import { activitySport } from './trainingLoad'
+import { sessionSport } from './sports'
 
 const CLIENT_ID = import.meta.env.VITE_STRAVA_CLIENT_ID
 
@@ -46,10 +48,18 @@ function localKey(d) {
 }
 
 // Find the activity that falls on the same calendar day as a session date.
-export function matchActivityToDate(activities, date) {
+// When `sport` is given (and isn't a compound/strength session), only an
+// activity of that discipline matches — so a run session pairs with a Run, not
+// a Ride you also did that day. `brick` matches any endurance activity.
+export function matchActivityToDate(activities, date, sport = null) {
   if (!date) return null
   const key = localKey(date)
-  return activities.find(a => a.start_date && a.start_date.slice(0, 10) === key) || null
+  const sameDay = (activities || []).filter(a => a.start_date && a.start_date.slice(0, 10) === key)
+  if (!sameDay.length) return null
+  if (sport && sport !== 'brick') {
+    return sameDay.find(a => activitySport(a) === sport) || null
+  }
+  return sameDay[0]
 }
 
 // Non-rest sessions on or before today that have a matching Strava ride and
@@ -63,10 +73,11 @@ export function getStravaAutoCompletions(plan, sessionState, activities, planSta
   today.setHours(0, 0, 0, 0)
   const out = []
   getScheduledSessions(plan, { base: planStart }).forEach(({ session, date, weekNum, idx }) => {
-    if (date.getTime() > today.getTime()) return // can't have ridden a future day
+    if (date.getTime() > today.getTime()) return // can't have trained a future day
+    if (session.zone === 'strength') return // no Strava activity maps to a gym session
     const st = sessionState[`w${weekNum}_${idx}`] || {}
     if (st.completed || st.bailed || st.auto_completed) return
-    const act = matchActivityToDate(activities, date)
+    const act = matchActivityToDate(activities, date, sessionSport(session))
     if (act) out.push({ weekNum, idx, zone: session.zone, completedAt: act.start_date })
   })
   return out
