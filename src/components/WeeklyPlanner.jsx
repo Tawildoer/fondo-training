@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { localDateStr, nextEvent, prevEvent } from '../lib/schedule'
 import {
-  computeWeekTarget, draftWeek, projectCtl,
+  computeWeekTarget, draftWeek, projectCtl, buildSession,
   ZONE_OPTIONS, DAY_NAMES, TIER_MIN, TIER_LABEL,
 } from '../lib/weeklyPlanner'
 
@@ -106,13 +106,26 @@ function defaultInputs(plannedWeeks, user, minHard = 2) {
   return ensureHardDays(base, minHard)
 }
 
-export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, events = [], loadCtx, onSave, onDelete, onGenerated }) {
+export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, sessionState = {}, events = [], loadCtx, onSave, onDelete, onGenerated }) {
   // On the weekend the current (Mon-anchored) week is basically done, so
   // default to planning next week — the one you're about to ride.
   const [offset, setOffset] = useState(() => ([0, 6].includes(new Date().getDay()) ? 1 : 0))
   const activeWeekNum = weekNum + offset
   const weekStart = useMemo(() => mondayOfWeek(planStart, activeWeekNum), [planStart, activeWeekNum])
   const existing = plannedWeeks.find(w => w.week_num === activeWeekNum)
+
+  // Days already done or in the past can't be re-planned — only rides still to
+  // come. Indices match draftWeek's Mon→Sun order (= the session index).
+  const lockedIdx = useMemo(() => {
+    const today0 = new Date(); today0.setHours(0, 0, 0, 0)
+    const set = new Set()
+    DAY_NAMES.forEach((_, i) => {
+      const dd = new Date(weekStart); dd.setDate(weekStart.getDate() + i)
+      const st = sessionState[`w${activeWeekNum}_${i}`] || {}
+      if (dd < today0 || st.completed || st.bailed) set.add(i)
+    })
+    return set
+  }, [weekStart, activeWeekNum, sessionState])
 
   const [inputs, setInputs] = useState(() => {
     const off = [0, 6].includes(new Date().getDay()) ? 1 : 0
@@ -186,7 +199,11 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   async function generate() {
     setSaving(true)
     const t = withCarry(computeWeekTarget(inputs, ctx))
-    const sessions = draftWeek(t, inputs, user.ftp)
+    const draft = draftWeek(t, inputs, user.ftp)
+    // Preserve locked days (completed/past) exactly; only redraft the rest.
+    const sessions = draft.map((s, i) => lockedIdx.has(i)
+      ? (existing?.sessions?.[i] || buildSession(DAY_NAMES[i], 'rest', 0, user.ftp))
+      : s)
     await onSave(activeWeekNum, {
       week_start: localDateStr(weekStart),
       target_tss: t.targetTss,
@@ -273,12 +290,35 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
               </div>
             </div>
 
-            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 16 }}>
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: lockedIdx.size ? 10 : 16 }}>
               Tap the days you can ride, then set how long and whether it's an easy or hard day.
             </p>
+            {lockedIdx.size > 0 && (
+              <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <i className="ti ti-lock" aria-hidden="true" /> Completed and past days are locked — re-planning only changes upcoming days.
+              </p>
+            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
-              {DAY_NAMES.map(day => {
+              {DAY_NAMES.map((day, i) => {
+                if (lockedIdx.has(i)) {
+                  const ex = existing?.sessions?.[i]
+                  const st = sessionState[`w${activeWeekNum}_${i}`] || {}
+                  const tag = st.completed ? 'Done' : st.bailed ? 'Missed' : 'Past'
+                  const summary = ex && ex.zone !== 'rest' ? `${ZONE_LABEL[ex.zone]} · ${fmtTime(ex.durationMin || 0)}` : 'Rest'
+                  return (
+                    <div key={day} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '8px 10px', borderRadius: 'var(--radius-sm)',
+                      background: 'var(--color-surface2)', border: '0.5px solid var(--color-border)', opacity: 0.7,
+                    }}>
+                      <span style={{ width: 46, textAlign: 'center', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--color-text-faint)' }}>{day}</span>
+                      <i className="ti ti-lock" style={{ fontSize: 14, color: 'var(--color-text-faint)' }} aria-hidden="true" />
+                      <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{summary}</span>
+                      <span className="tag" style={{ marginLeft: 'auto' }}>{tag}</span>
+                    </div>
+                  )
+                }
                 const d = inputs.days[day]
                 const on = !!d
                 return (
