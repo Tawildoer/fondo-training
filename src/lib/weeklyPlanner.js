@@ -10,6 +10,7 @@
 
 import { getZoneLabel } from './planGenerator'
 import { nextEvent, prevEvent, parseLocalDate, localDateStr } from './schedule'
+import { eventSport } from './sports'
 
 const ZONE_IF = { z1: 0.45, z2: 0.65, z3: 0.83, z4: 0.98, z5: 1.13 }
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -35,9 +36,39 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 // type + distance. Used so the projection bumps up on the event, not just dips.
 const EVENT_SPEED = { road_race: 38, criterium: 40, time_trial: 40, gran_fondo: 29, sportive: 28, other: 30 } // km/h
 const EVENT_IF = { road_race: 0.85, criterium: 0.88, time_trial: 0.92, gran_fondo: 0.78, sportive: 0.76, other: 0.78 }
+
+// Standard triathlon leg distances (km), so a tri's TSS is the sum of its legs.
+const TRI_LEGS = {
+  tri_sprint:  { swim: 0.75, bike: 20,  run: 5 },
+  tri_olympic: { swim: 1.5,  bike: 40,  run: 10 },
+  tri_70_3:    { swim: 1.9,  bike: 90,  run: 21.1 },
+  tri_ironman: { swim: 3.8,  bike: 180, run: 42.2 },
+}
+const legTss = (km, speed, IF) => clamp(km / speed, 0.1, 12) * IF * IF * 100
+
 export function estimateEventTss(event) {
   if (!event) return 0
   const type = event.event_type || 'other'
+  const sport = eventSport(type)
+
+  if (sport === 'tri') {
+    const legs = TRI_LEGS[type] || TRI_LEGS.tri_olympic
+    const long = type === 'tri_70_3' || type === 'tri_ironman' // lower intensity, longer day
+    const tss = legTss(legs.swim, 3.0, long ? 0.72 : 0.80)
+      + legTss(legs.bike, long ? 31 : 30, long ? 0.70 : 0.80)
+      + legTss(legs.run, 10, long ? 0.74 : 0.82)
+    return Math.round(tss)
+  }
+
+  if (sport === 'run') {
+    const km = event.distance_km || 10
+    // Shorter races run faster and harder; the marathon is steadier.
+    const speed = km <= 5 ? 12.5 : km <= 10 ? 11.5 : km <= 21.1 ? 10.8 : 10 // km/h
+    const IF = km <= 5 ? 0.92 : km <= 10 ? 0.90 : km <= 21.1 ? 0.86 : 0.82
+    return Math.round(clamp(km / speed, 0.25, 5) * IF * IF * 100)
+  }
+
+  // Cycling (unchanged).
   const IF = EVENT_IF[type] || 0.78
   let hours = event.distance_km ? event.distance_km / (EVENT_SPEED[type] || 30) : null
   if (!hours) hours = ['criterium', 'time_trial'].includes(type) ? 1 : 3 // sensible default

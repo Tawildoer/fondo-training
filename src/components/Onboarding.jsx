@@ -8,7 +8,12 @@ const EVENT_TYPES = [
   { value: 'road_race', label: 'Road race', icon: 'ti-flag' },
   { value: 'criterium', label: 'Criterium', icon: 'ti-rotate-clockwise' },
   { value: 'time_trial', label: 'Time trial', icon: 'ti-clock' },
-  { value: 'other', label: 'Other', icon: 'ti-bike' },
+  { value: 'other', label: 'Other ride', icon: 'ti-bike' },
+  { value: 'running', label: 'Running race', icon: 'ti-run' },
+  { value: 'tri_sprint', label: 'Tri · Sprint', icon: 'ti-trophy' },
+  { value: 'tri_olympic', label: 'Tri · Olympic', icon: 'ti-trophy' },
+  { value: 'tri_70_3', label: 'Tri · 70.3', icon: 'ti-trophy' },
+  { value: 'tri_ironman', label: 'Tri · Ironman', icon: 'ti-trophy' },
 ]
 
 const STRENGTHS = [
