@@ -17,6 +17,8 @@ create table users (
   -- Fitness
   ftp int,
   max_hr int,
+  threshold_pace_run int,        -- multi-sport: run threshold pace, seconds per km
+  css_swim int,                  -- multi-sport: critical swim speed, seconds per 100m
   age_group text,
   riding_strength text,          -- climber, sprinter, time_trialist, all_rounder
   weekly_hours_start int,
@@ -35,6 +37,8 @@ create table users (
 --   alter table users add column if not exists plan_start_date date;
 --   alter table users add column if not exists planning_mode text default 'fixed';
 --   alter table users add column if not exists fitness_goal text default 'build';
+--   alter table users add column if not exists threshold_pace_run int;
+--   alter table users add column if not exists css_swim int;
 
 -- 2. Session state (checkbox + RPE + notes per session per user)
 create table session_state (
