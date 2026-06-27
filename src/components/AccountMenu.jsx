@@ -36,10 +36,21 @@ function AccountSection({ user, authEmail, onUpdateProfile, onLogout }) {
   )
 }
 
+// "m:ss" ⇄ seconds, for run/swim threshold-pace inputs.
+const fmtMMSS = sec => (sec ? `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}` : '')
+const parseMMSS = str => {
+  if (!str) return null
+  const m = String(str).trim().match(/^(\d+):([0-5]?\d)$/)
+  if (!m) return null
+  return parseInt(m[1]) * 60 + parseInt(m[2])
+}
+
 function SettingsSection({ user, onUpdateProfile, onUpdateFTP }) {
   const init = () => ({
     ftp: user.ftp ?? '',
     max_hr: user.max_hr ?? '',
+    threshold_pace_run: fmtMMSS(user.threshold_pace_run),
+    css_swim: fmtMMSS(user.css_swim),
     weekly_hours_start: user.weekly_hours_start ?? '',
     days_per_week: user.days_per_week ?? '',
     fitness_goal: user.fitness_goal || 'build',
@@ -47,7 +58,7 @@ function SettingsSection({ user, onUpdateProfile, onUpdateFTP }) {
   const [form, setForm] = useState(init)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  useEffect(() => { setForm(init()) }, [user.ftp, user.max_hr, user.weekly_hours_start, user.days_per_week, user.fitness_goal])
+  useEffect(() => { setForm(init()) }, [user.ftp, user.max_hr, user.threshold_pace_run, user.css_swim, user.weekly_hours_start, user.days_per_week, user.fitness_goal])
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setSaved(false) }
 
   async function save() {
@@ -56,6 +67,8 @@ function SettingsSection({ user, onUpdateProfile, onUpdateFTP }) {
     if (ftp >= 50 && ftp <= 600 && ftp !== user.ftp) await onUpdateFTP(ftp)
     await onUpdateProfile({
       max_hr: form.max_hr ? parseInt(form.max_hr) : null,
+      threshold_pace_run: parseMMSS(form.threshold_pace_run),
+      css_swim: parseMMSS(form.css_swim),
       weekly_hours_start: form.weekly_hours_start ? parseFloat(form.weekly_hours_start) : null,
       days_per_week: form.days_per_week ? parseInt(form.days_per_week) : null,
       fitness_goal: form.fitness_goal,
@@ -75,6 +88,17 @@ function SettingsSection({ user, onUpdateProfile, onUpdateFTP }) {
         <label htmlFor="set-hr">Max heart rate (bpm)</label>
         <input id="set-hr" type="number" min="120" max="230" value={form.max_hr} onChange={e => set('max_hr', e.target.value)} placeholder="e.g. 188" />
       </div>
+      <div style={{ display: 'flex', gap: 12 }}>
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="set-runpace">Run threshold pace</label>
+          <input id="set-runpace" type="text" inputMode="numeric" value={form.threshold_pace_run} onChange={e => set('threshold_pace_run', e.target.value)} placeholder="m:ss /km, e.g. 4:15" />
+        </div>
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="set-css">Swim CSS</label>
+          <input id="set-css" type="text" inputMode="numeric" value={form.css_swim} onChange={e => set('css_swim', e.target.value)} placeholder="m:ss /100m, e.g. 1:45" />
+        </div>
+      </div>
+      <div className="hint" style={{ marginTop: -4, marginBottom: 12 }}>Optional — adds pace targets to run &amp; swim sessions. Leave blank to use heart-rate &amp; effort.</div>
       <div style={{ display: 'flex', gap: 12 }}>
         <div className="field" style={{ flex: 1 }}>
           <label htmlFor="set-hours">Weekly hours</label>

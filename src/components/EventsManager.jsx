@@ -1,14 +1,30 @@
 import { useState } from 'react'
+import { SPORTS, eventSport } from '../lib/sports'
 
 const EVENT_TYPES = [
-  { value: 'gran_fondo', label: 'Gran Fondo' },
-  { value: 'sportive', label: 'Sportive' },
-  { value: 'road_race', label: 'Road race' },
-  { value: 'criterium', label: 'Criterium' },
-  { value: 'time_trial', label: 'Time trial' },
-  { value: 'other', label: 'Other' },
+  { value: 'gran_fondo', label: 'Gran Fondo', sport: 'bike' },
+  { value: 'sportive', label: 'Sportive', sport: 'bike' },
+  { value: 'road_race', label: 'Road race', sport: 'bike' },
+  { value: 'criterium', label: 'Criterium', sport: 'bike' },
+  { value: 'time_trial', label: 'Time trial', sport: 'bike' },
+  { value: 'other', label: 'Other', sport: 'bike' },
+  { value: 'running', label: 'Running race', sport: 'run' },
+  { value: 'tri_sprint', label: 'Triathlon · Sprint', sport: 'tri' },
+  { value: 'tri_olympic', label: 'Triathlon · Olympic', sport: 'tri' },
+  { value: 'tri_70_3', label: 'Triathlon · 70.3', sport: 'tri' },
+  { value: 'tri_ironman', label: 'Triathlon · Ironman', sport: 'tri' },
 ]
 const TYPE_LABEL = Object.fromEntries(EVENT_TYPES.map(t => [t.value, t.label]))
+
+// Grouped for the picker so the three disciplines read clearly.
+const TYPE_GROUPS = [
+  { sport: 'bike', label: 'Cycling', types: EVENT_TYPES.filter(t => t.sport === 'bike') },
+  { sport: 'run', label: 'Running', types: EVENT_TYPES.filter(t => t.sport === 'run') },
+  { sport: 'tri', label: 'Triathlon', types: EVENT_TYPES.filter(t => t.sport === 'tri') },
+]
+// The icon for an event's discipline (triathlon gets its own glyph).
+const SPORT_ICON = { bike: SPORTS.bike.icon, run: SPORTS.run.icon, tri: 'ti-trophy' }
+const eventIcon = type => SPORT_ICON[eventSport(type)] || 'ti-flag'
 
 const blank = { name: '', date: '', event_type: 'gran_fondo', distance_km: '' }
 
@@ -58,7 +74,7 @@ export default function EventsManager({ events, onAdd, onUpdate, onDelete }) {
     const dt = daysTo(e.date)
     return (
       <div className="sess-row" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 'var(--radius-sm)', background: 'var(--color-surface2)', flexWrap: 'wrap' }}>
-        <i className="ti ti-flag" style={{ fontSize: 16, color: 'var(--color-electric)', flexShrink: 0 }} aria-hidden="true" />
+        <i className={`ti ${eventIcon(e.event_type)}`} style={{ fontSize: 16, color: 'var(--color-electric)', flexShrink: 0 }} aria-hidden="true" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 14 }}>{e.name || TYPE_LABEL[e.event_type] || 'Event'}</div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
@@ -104,10 +120,19 @@ export default function EventsManager({ events, onAdd, onUpdate, onDelete }) {
           </div>
           <div className="field">
             <label>Type</label>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {EVENT_TYPES.map(t => (
-                <button key={t.value} onClick={() => setForm(f => ({ ...f, event_type: t.value }))}
-                  className={`btn btn-sm ${form.event_type === t.value ? 'btn-primary' : ''}`}>{t.label}</button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {TYPE_GROUPS.map(g => (
+                <div key={g.sport}>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--color-text-faint)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <i className={`ti ${SPORT_ICON[g.sport]}`} aria-hidden="true" /> {g.label}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {g.types.map(t => (
+                      <button key={t.value} onClick={() => setForm(f => ({ ...f, event_type: t.value }))}
+                        className={`btn btn-sm ${form.event_type === t.value ? 'btn-primary' : ''}`}>{t.label}</button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>

@@ -72,10 +72,14 @@ export default async function handler(req, res) {
     return res.status(502).json({ error: 'strava list failed', detail })
   }
   const list = await listRes.json()
-  const rides = list.filter(a => /ride/i.test(a.sport_type || a.type || '')).slice(0, MAX_RIDES_PER_SYNC)
+  // Import all endurance disciplines (bike, run, swim) — multi-sport athletes
+  // train across them and each contributes to training load.
+  const trainable = list
+    .filter(a => /ride|run|swim/i.test(a.sport_type || a.type || ''))
+    .slice(0, MAX_RIDES_PER_SYNC)
 
   let imported = 0
-  for (const a of rides) {
+  for (const a of trainable) {
     const streams = await fetchStreams(a.id, token)
     const { error: upErr } = await ctx.supabase.from('activities').upsert({
       user_id: ctx.userId,

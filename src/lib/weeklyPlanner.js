@@ -8,8 +8,9 @@
 // Output sessions match the app-wide plan shape so every downstream feature
 // (calendar, streak, training load, Strava auto-complete) just works.
 
-import { getZoneLabel } from './planGenerator'
+import { getZoneLabel, getRunPace, getSwimPace, fmtPace } from './planGenerator'
 import { nextEvent, prevEvent, parseLocalDate, localDateStr } from './schedule'
+import { eventSport } from './sports'
 
 const ZONE_IF = { z1: 0.45, z2: 0.65, z3: 0.83, z4: 0.98, z5: 1.13 }
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -35,9 +36,39 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 // type + distance. Used so the projection bumps up on the event, not just dips.
 const EVENT_SPEED = { road_race: 38, criterium: 40, time_trial: 40, gran_fondo: 29, sportive: 28, other: 30 } // km/h
 const EVENT_IF = { road_race: 0.85, criterium: 0.88, time_trial: 0.92, gran_fondo: 0.78, sportive: 0.76, other: 0.78 }
+
+// Standard triathlon leg distances (km), so a tri's TSS is the sum of its legs.
+const TRI_LEGS = {
+  tri_sprint:  { swim: 0.75, bike: 20,  run: 5 },
+  tri_olympic: { swim: 1.5,  bike: 40,  run: 10 },
+  tri_70_3:    { swim: 1.9,  bike: 90,  run: 21.1 },
+  tri_ironman: { swim: 3.8,  bike: 180, run: 42.2 },
+}
+const legTss = (km, speed, IF) => clamp(km / speed, 0.1, 12) * IF * IF * 100
+
 export function estimateEventTss(event) {
   if (!event) return 0
   const type = event.event_type || 'other'
+  const sport = eventSport(type)
+
+  if (sport === 'tri') {
+    const legs = TRI_LEGS[type] || TRI_LEGS.tri_olympic
+    const long = type === 'tri_70_3' || type === 'tri_ironman' // lower intensity, longer day
+    const tss = legTss(legs.swim, 3.0, long ? 0.72 : 0.80)
+      + legTss(legs.bike, long ? 31 : 30, long ? 0.70 : 0.80)
+      + legTss(legs.run, 10, long ? 0.74 : 0.82)
+    return Math.round(tss)
+  }
+
+  if (sport === 'run') {
+    const km = event.distance_km || 10
+    // Shorter races run faster and harder; the marathon is steadier.
+    const speed = km <= 5 ? 12.5 : km <= 10 ? 11.5 : km <= 21.1 ? 10.8 : 10 // km/h
+    const IF = km <= 5 ? 0.92 : km <= 10 ? 0.90 : km <= 21.1 ? 0.86 : 0.82
+    return Math.round(clamp(km / speed, 0.25, 5) * IF * IF * 100)
+  }
+
+  // Cycling (unchanged).
   const IF = EVENT_IF[type] || 0.78
   let hours = event.distance_km ? event.distance_km / (EVENT_SPEED[type] || 30) : null
   if (!hours) hours = ['criterium', 'time_trial'].includes(type) ? 1 : 3 // sensible default
@@ -161,7 +192,9 @@ function buildNote({ goal, weeksToEvent, weeksSinceEvent, isRecovery, busy, deep
 const restDay = day => ({ day, name: 'Rest', zone: 'rest', desc: 'Full rest. Sleep, hydrate, eat well.', durationMin: 0 })
 
 // Build a single session (used by the draft and by the inline editor).
-export function buildSession(day, zone, minutes, ftp, isLong = false) {
+// `sport` defaults to 'bike' so every existing caller (and every plan saved
+// before multi-sport) is byte-identical — bike sessions carry no `sport` field.
+export function buildSession(day, zone, minutes, ftp, isLong = false, sport = 'bike') {
   if (zone === 'rest') return restDay(day)
   if (zone === 'strength') {
     const sm = clamp(Math.round(minutes / 5) * 5, ZONE_META.strength.min, ZONE_META.strength.max)
@@ -175,12 +208,34 @@ export function buildSession(day, zone, minutes, ftp, isLong = false) {
   }
   const meta = ZONE_META[zone] || ZONE_META.z2
   const min = clamp(Math.round(minutes / 5) * 5, 10, meta.max)
-  return {
+  const names = ZONE_NAME[sport] || ZONE_NAME.bike
+  const isLongEasy = isLong && zone === 'z2'
+  const base = {
     day,
     zone,
-    name: isLong && zone === 'z2' ? 'Long ride' : meta.name,
-    desc: describe(zone, min, ftp, isLong),
+    name: isLongEasy ? (LONG_NAME[sport] || LONG_NAME.bike) : (names[zone] || meta.name),
+    desc: describe(zone, min, ftp, isLong, sport),
     durationMin: min,
+  }
+  return sport === 'bike' ? base : { ...base, sport }
+}
+
+// A brick: a bike effort run straight into a run, on race-tired legs. Modelled
+// as a compound session whose load is the sum of its legs (see brickTss).
+export function buildBrick(day, bikeMin, runMin, ftp) {
+  const bMin = clamp(Math.round((bikeMin || 60) / 5) * 5, 20, 180)
+  const rMin = clamp(Math.round((runMin || 20) / 5) * 5, 10, 75)
+  return {
+    day,
+    sport: 'brick',
+    zone: 'z3', // representative effort for the card colour / fallbacks
+    name: 'Brick',
+    desc: `${fmtDur(bMin)} bike straight into a ${fmtDur(rMin)} run — practise running off the bike on race legs.`,
+    durationMin: bMin + rMin,
+    legs: [
+      { sport: 'bike', zone: 'z3', durationMin: bMin, desc: describe('z3', bMin, ftp, false, 'bike') },
+      { sport: 'run', zone: 'z2', durationMin: rMin, desc: describe('z2', rMin, ftp, false, 'run') },
+    ],
   }
 }
 
@@ -207,8 +262,19 @@ function fmtDur(min) {
   return `${Math.round(min / 5) * 5} min`
 }
 
-function describe(zone, min, ftp, isLong) {
+// Per-sport session titles by effort zone. Bike keeps its exact original names
+// (so existing plans are unchanged); run/swim get discipline-appropriate ones.
+const ZONE_NAME = {
+  bike: { z1: 'Recovery spin', z2: 'Endurance', z3: 'Sweet spot', z4: 'Threshold intervals', z5: 'VO₂ intervals' },
+  run:  { z1: 'Recovery jog', z2: 'Easy run', z3: 'Tempo run', z4: 'Threshold run', z5: 'VO₂ intervals' },
+  swim: { z1: 'Technique swim', z2: 'Endurance swim', z3: 'Tempo swim', z4: 'Threshold swim', z5: 'Sprint swim' },
+}
+const LONG_NAME = { bike: 'Long ride', run: 'Long run', swim: 'Long swim' }
+
+function describe(zone, min, ftp, isLong, sport = 'bike') {
   const dur = fmtDur(min)
+  if (sport === 'run') return describeRun(zone, dur, isLong)
+  if (sport === 'swim') return describeSwim(zone, dur, isLong)
   const zl = ftp ? getZoneLabel(zone.toUpperCase(), ftp) : zone.toUpperCase()
   switch (zone) {
     case 'z1': return `${dur} very easy. Legs only, no intensity.`
@@ -218,6 +284,34 @@ function describe(zone, min, ftp, isLong) {
     case 'z3': return `${dur} with sweet-spot blocks at ${zl}. Smooth, sustained power.`
     case 'z4': return `${dur} of threshold work at ${zl}. The key quality session — full recoveries between efforts.`
     case 'z5': return `${dur} with VO₂ intervals at ${zl}. Short, hard, full recoveries. Sharpening top end.`
+    default: return `${dur}.`
+  }
+}
+
+// Run/swim prose is effort-based; pace targets (when thresholds are set) are
+// layered on at render time in Phase 3, the same way watts are for the bike.
+function describeRun(zone, dur, isLong) {
+  switch (zone) {
+    case 'z1': return `${dur} very easy jog. Conversational, light feet — pure recovery.`
+    case 'z2': return isLong
+      ? `${dur} long run at an easy aerobic pace. Fuel + hydrate — building time on feet.`
+      : `${dur} easy aerobic run. Comfortable, nose-breathing pace, no drifting up.`
+    case 'z3': return `${dur} with tempo blocks — "comfortably hard", controlled breathing.`
+    case 'z4': return `${dur} of threshold reps near 10k effort. Strong but repeatable, with recoveries.`
+    case 'z5': return `${dur} with short, fast VO₂ intervals. Hard efforts, full recoveries — top-end sharpening.`
+    default: return `${dur}.`
+  }
+}
+
+function describeSwim(zone, dur, isLong) {
+  switch (zone) {
+    case 'z1': return `${dur} easy technique swim. Drills + smooth form, low effort.`
+    case 'z2': return isLong
+      ? `${dur} continuous endurance swim. Steady aerobic, even pacing throughout.`
+      : `${dur} aerobic swim in steady sets. Relaxed, long strokes, short rests.`
+    case 'z3': return `${dur} of tempo sets at a "comfortably hard" pace, short rests.`
+    case 'z4': return `${dur} of threshold sets near race pace. Controlled and strong, moderate rests.`
+    case 'z5': return `${dur} of sprint sets — short and fast with full rest. Top-end speed.`
     default: return `${dur}.`
   }
 }
@@ -234,9 +328,21 @@ const WORKOUT_SCHEME = {
 }
 const STEADY_PCT = { z1: 0.50, z2: 0.65 }
 
-export function buildWorkout(zone, totalMin, ftp) {
+// The headline target for a workout: watts (bike), pace/km (run) or pace/100m
+// (swim) when the threshold is known, else just the zone name. `opts` carries
+// the sport + per-sport thresholds; defaulting to bike keeps every existing
+// caller (and the .zwo export) unchanged.
+export function workoutTarget(zone, ftp, opts = {}) {
+  const Z = zone.toUpperCase()
+  const { sport = 'bike', thresholdPaceRun, cssSwim } = opts
+  if (sport === 'run') { const p = getRunPace(Z, thresholdPaceRun); return p ? `${fmtPace(p.fast)}–${fmtPace(p.slow)}/km` : Z }
+  if (sport === 'swim') { const p = getSwimPace(Z, cssSwim); return p ? `${fmtPace(p.fast)}–${fmtPace(p.slow)}/100m` : Z }
+  return ftp ? getZoneLabel(Z, ftp) : Z
+}
+
+export function buildWorkout(zone, totalMin, ftp, opts = {}) {
   const total = Math.max(20, Math.round(totalMin || 60))
-  const target = ftp ? getZoneLabel(zone.toUpperCase(), ftp) : zone.toUpperCase()
+  const target = workoutTarget(zone, ftp, opts)
 
   // Steady rides: one flat block, no interval breakdown.
   if (!WORKOUT_SCHEME[zone]) {
@@ -316,6 +422,35 @@ export function buildStrength(totalMin) {
   }
 }
 
+// Expand a swim session into a warm-up → main set → cool-down prescription,
+// the swimmer's analogue of buildWorkout. Rounds scale with the time you set;
+// the main set's shape comes from the effort zone. Distances are pool-friendly.
+export function buildSwimSets(zone, totalMin) {
+  const total = clamp(Math.round(totalMin || 45), 20, 90)
+  const rounds = total >= 60 ? 6 : total >= 40 ? 5 : 4
+  const main = {
+    z1: { name: `${rounds} × 100 m easy`, detail: 'smooth, 20 s rest', note: 'Technique focus — long, relaxed strokes.' },
+    z2: { name: `${rounds} × 200 m steady`, detail: '20 s rest', note: 'Aerobic endurance, even splits.' },
+    z3: { name: `${rounds} × 150 m tempo`, detail: '20 s rest', note: 'Comfortably hard, hold form.' },
+    z4: { name: `${rounds + 1} × 100 m @ threshold (CSS)`, detail: '15 s rest', note: 'Race-pace effort, strong and controlled.' },
+    z5: { name: `${rounds + 2} × 50 m fast`, detail: 'full rest', note: 'Sprint speed, full recovery between.' },
+  }[zone] || { name: `${rounds} × 200 m steady`, detail: '20 s rest' }
+  return {
+    total,
+    summary: main.name,
+    blocks: [
+      { kind: 'warmup', label: 'Warm-up', items: [
+        { name: '200–300 m easy swim', detail: 'mixed stroke' },
+        { name: '4 × 50 m drills', detail: '15 s rest' },
+      ] },
+      { kind: 'main', label: 'Main set', items: [main] },
+      { kind: 'cooldown', label: 'Cool-down', items: [
+        { name: '100–200 m easy', detail: 'loosen down' },
+      ] },
+    ],
+  }
+}
+
 // Per-day length tiers → minutes. Coarse up front; fine-tune in the draft.
 export const TIER_MIN = { S: 45, M: 90, L: 150 }
 export const TIER_LABEL = { S: 'Short', M: 'Med', L: 'Long' }
@@ -328,30 +463,77 @@ function hardZone(i, focus, length) {
   return i % 2 === 0 ? 'z4' : 'z3'
 }
 
+// Triathlon discipline assignment: spread swim/bike/run across the chosen days
+// with one weekend brick. Deterministic so re-planning is stable.
+function assignTriSports(onDays, target) {
+  const out = {}
+  const weekend = onDays.filter(d => d === 'Sat' || d === 'Sun')
+  const weekday = onDays.filter(d => d !== 'Sat' && d !== 'Sun')
+
+  // A brick on a weekend day (Sat preferred), except in a recovery week.
+  let brickDay = null
+  if (!target.isRecovery && weekend.length) {
+    brickDay = weekend.includes('Sat') ? 'Sat' : weekend[0]
+    out[brickDay] = 'brick'
+  }
+  // Long bike on any other weekend day.
+  weekend.filter(d => d !== brickDay).forEach(d => { out[d] = 'bike' })
+
+  // Weekdays round-robin run → swim → bike (run carries most weekly volume),
+  // which also keeps the same discipline from landing three days running.
+  const cycle = ['run', 'swim', 'bike']
+  weekday.forEach((d, i) => { out[d] = cycle[i % cycle.length] })
+
+  // Guarantee a swim if there's room for one and the rotation missed it.
+  if (onDays.length >= 3 && !Object.values(out).includes('swim')) {
+    const swap = weekday.find(d => out[d] === 'bike') || weekday[0]
+    if (swap) out[swap] = 'swim'
+  }
+  return out
+}
+
+// The discipline each chosen day will be — single-sport everywhere, or the tri
+// spread. Exported so the planner UI can preview the same badges draftWeek uses.
+export function sportsForWeek(inputs, target, goalSport = 'bike') {
+  const onDays = DAY_NAMES.filter(d => (inputs?.days || {})[d])
+  if (goalSport === 'tri') return assignTriSports(onDays, target)
+  return Object.fromEntries(onDays.map(d => [d, goalSport === 'run' ? 'run' : 'bike']))
+}
+
 // Lay the week out directly from your per-day choices: each on-day carries a
 // length (S/M/L) and a type (easy/hard). Off-days are rest. A recovery week
-// forces everything easy.
-export function draftWeek(target, inputs, ftp) {
+// forces everything easy. `goalSport` ('bike' | 'run' | 'tri') comes from the
+// event being trained for; tri weeks mix all three disciplines.
+export function draftWeek(target, inputs, ftp, goalSport = 'bike') {
   const days = inputs?.days || {}
   const focus = inputs?.focus || 'none'
   const onDays = DAY_NAMES.filter(d => days[d])
   if (!onDays.length) return DAY_NAMES.map(restDay)
 
-  // Long ride = the longest easy day.
+  // Per-day discipline: single-sport everywhere, or the tri spread.
+  const sportByDay = sportsForWeek(inputs, target, goalSport)
+
+  // Long session = the longest easy day, but never a swim or brick day.
   const longEasy = onDays
-    .filter(d => (days[d].type || 'easy') === 'easy')
+    .filter(d => (days[d].type || 'easy') === 'easy' && sportByDay[d] !== 'swim' && sportByDay[d] !== 'brick')
     .sort((a, b) => TIER_MIN[days[b].length] - TIER_MIN[days[a].length])[0]
 
   let hardSeen = 0
   const byDay = {}
   onDays.forEach(day => {
+    const sport = sportByDay[day]
     const { length = 'M', type = 'easy' } = days[day]
-    const minutes = TIER_MIN[length] || 90
+    let minutes = TIER_MIN[length] || 90
+    if (sport === 'brick') { // split the day ~70% bike / 30% run
+      byDay[day] = buildBrick(day, Math.round(minutes * 0.7), Math.round(minutes * 0.3), ftp)
+      return
+    }
+    if (sport === 'swim') minutes = Math.min(minutes, 75) // swims don't run long
     let zone
     if (target.isRecovery) zone = minutes <= 45 ? 'z1' : 'z2'
     else if (type === 'hard') zone = hardZone(hardSeen++, focus, length)
     else zone = minutes <= 45 ? 'z1' : 'z2'
-    byDay[day] = buildSession(day, zone, minutes, ftp, day === longEasy && zone === 'z2')
+    byDay[day] = buildSession(day, zone, minutes, ftp, day === longEasy && zone === 'z2', sport)
   })
 
   // Optional strength: drop 1–2 sessions onto otherwise-rest days, preferring
@@ -448,8 +630,15 @@ export function projectLoad({ currentCtl = 0, recentWeeklyTss = 0, planStart, cu
 export function weekTss(sessions) {
   return (sessions || []).reduce((s, x) => {
     if (!x || x.zone === 'rest' || x.zone === 'strength') return s
+    if (x.sport === 'brick') return s + brickTss(x)
     const minutes = x.durationMin != null ? x.durationMin
       : (() => { const m = x.desc?.match(/^(\d+(?:\.\d+)?)\s*(hr|hrs|hour|hours|min|mins|minutes)/i); return m ? (m[2][0].toLowerCase() === 'h' ? +m[1] * 60 : +m[1]) : 0 })()
     return s + tssFor(x.zone, minutes)
   }, 0)
+}
+
+// Prescribed TSS of a brick = the sum of its legs' load (each leg is a normal
+// effort/duration). Used wherever a session's load is summed.
+export function brickTss(session) {
+  return (session?.legs || []).reduce((s, leg) => s + tssFor(leg.zone, leg.durationMin || 0), 0)
 }

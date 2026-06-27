@@ -28,6 +28,35 @@ export function getZoneLabel(zone, ftp) {
   return `${zone} (${w.lo}–${w.hi}W)`
 }
 
+// ── Pace zones (run & swim) ──────────────────────────────────
+// Pace is the inverse of effort: each zone is a band of speed expressed as a
+// fraction of the athlete's threshold speed, so a faster fraction → a smaller
+// (quicker) pace number. Threshold (Z4) sits at ~1.0. Bands are per-discipline.
+const RUN_SPEED_BANDS = { // fraction of threshold-pace speed
+  Z1: [0.70, 0.80], Z2: [0.80, 0.87], Z3: [0.87, 0.94], Z4: [0.94, 1.02], Z5: [1.02, 1.12],
+}
+const SWIM_SPEED_BANDS = { // fraction of CSS speed
+  Z1: [0.80, 0.88], Z2: [0.88, 0.93], Z3: [0.93, 0.98], Z4: [0.98, 1.03], Z5: [1.03, 1.12],
+}
+
+// `threshold` is seconds per km (run) or per 100m (swim). Returns { slow, fast }
+// in the same unit (slow = bigger number), or null when no threshold is set.
+function paceBand(bands, zone, threshold) {
+  const b = bands[zone]
+  if (!b || !threshold) return null
+  return { slow: Math.round(threshold / b[0]), fast: Math.round(threshold / b[1]) }
+}
+export const getRunPace = (zone, thresholdPaceSecPerKm) => paceBand(RUN_SPEED_BANDS, zone, thresholdPaceSecPerKm)
+export const getSwimPace = (zone, cssSecPer100m) => paceBand(SWIM_SPEED_BANDS, zone, cssSecPer100m)
+
+// Seconds → "m:ss" (e.g. 312 → "5:12").
+export function fmtPace(sec) {
+  if (!sec || sec <= 0) return '—'
+  const m = Math.floor(sec / 60)
+  const s = Math.round(sec % 60)
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 // RPE labels
 export const RPE_LABELS = ['', 'Very easy', 'Easy', 'Moderate', 'Hard', 'Max effort']
 export const RPE_FEEDBACK = [

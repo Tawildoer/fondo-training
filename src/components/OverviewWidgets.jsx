@@ -3,7 +3,8 @@
 // rather than decorate. Kept here to keep Overview itself a clean composition.
 
 import { getScheduledSessions, localDateStr } from '../lib/schedule'
-import { estActivityTSS } from '../lib/trainingLoad'
+import { estActivityTSS, activitySport } from '../lib/trainingLoad'
+import { SPORTS } from '../lib/sports'
 
 // Form (TSB) bands — mirrors Analytics' thresholds.
 function formMeta(tsb) {
@@ -154,7 +155,7 @@ function fmtDur(s) {
   const m = Math.round((s || 0) / 60)
   return m >= 60 ? `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m` : `${m}m`
 }
-export function RecentRides({ activities = [], ftp, maxHr }) {
+export function RecentRides({ activities = [], ftp, maxHr, thresholdPaceRun, cssSwim }) {
   const rides = [...activities]
     .filter(a => a.start_date)
     .sort((a, b) => (a.start_date < b.start_date ? 1 : -1))
@@ -171,13 +172,14 @@ export function RecentRides({ activities = [], ftp, maxHr }) {
         <div>
           {rides.map((a, i) => {
             const d = new Date(a.start_date)
-            const tss = estActivityTSS(a, ftp, maxHr)
+            const tss = estActivityTSS(a, ftp, maxHr, { thresholdPaceRun, cssSwim })
+            const aSport = activitySport(a)
             const km = a.distance_m ? (a.distance_m / 1000).toFixed(a.distance_m >= 100000 ? 0 : 1) : null
             const np = a.weighted_avg_watts || a.avg_watts
             return (
               <div key={a.id || i} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 0', borderTop: i ? '0.5px solid var(--color-border)' : 'none' }}>
                 <div style={{ width: 34, height: 34, borderRadius: 'var(--radius-sm)', background: 'var(--color-surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--color-accent-text)' }}>
-                  <i className="ti ti-bike" style={{ fontSize: 17 }} aria-hidden="true" />
+                  <i className={`ti ${SPORTS[aSport]?.icon || 'ti-bike'}`} style={{ fontSize: 17 }} aria-hidden="true" />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name || 'Ride'}</div>

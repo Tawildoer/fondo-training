@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react'
 import { localDateStr, nextEvent, prevEvent } from '../lib/schedule'
 import {
-  computeWeekTarget, draftWeek, projectCtl, buildSession,
+  computeWeekTarget, draftWeek, projectCtl, buildSession, sportsForWeek,
   ZONE_OPTIONS, DAY_NAMES, TIER_MIN, TIER_LABEL, strengthEligible,
 } from '../lib/weeklyPlanner'
+import { SPORTS, eventSport } from '../lib/sports'
 
 const LENGTHS = ['S', 'M', 'L']
 
@@ -181,6 +182,13 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   // much to aim for before you even slide the days.
   const suggestion = useMemo(() => withCarry(computeWeekTarget(inputs, ctx)), [inputs, ctx, carryIn])
 
+  // The discipline this week trains for (from the nearest event). For run/tri
+  // events the planner assigns a sport to each day; bike weeks are unchanged.
+  const goalSport = ev ? eventSport(ev.event_type) : 'bike'
+  const sportByDay = useMemo(
+    () => goalSport === 'bike' ? {} : sportsForWeek(inputs, suggestion, goalSport),
+    [inputs, suggestion, goalSport])
+
   const weekLabel = weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
   function toggleDay(day) {
@@ -200,7 +208,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   async function generate() {
     setSaving(true)
     const t = withCarry(computeWeekTarget(inputs, ctx))
-    const draft = draftWeek(t, inputs, user.ftp)
+    const draft = draftWeek(t, inputs, user.ftp, goalSport)
     // Preserve locked days (completed/past) exactly; only redraft the rest.
     const sessions = draft.map((s, i) => lockedIdx.has(i)
       ? (existing?.sessions?.[i] || buildSession(DAY_NAMES[i], 'rest', 0, user.ftp))
@@ -350,6 +358,11 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                           options={LENGTHS.map(l => ({ v: l, label: TIER_LABEL[l] }))} />
                         <MiniSeg value={d.type} onChange={v => setDayField(day, 'type', v)}
                           options={[{ v: 'easy', label: 'Easy' }, { v: 'hard', label: 'Hard' }]} />
+                        {goalSport !== 'bike' && sportByDay[day] && (
+                          <span title="Auto-assigned discipline" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--color-accent-text)' }}>
+                            <i className={`ti ${SPORTS[sportByDay[day]]?.icon || ''}`} aria-hidden="true" /> {SPORTS[sportByDay[day]]?.label}
+                          </span>
+                        )}
                         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-faint)' }}>{fmtTime(TIER_MIN[d.length])}</span>
                       </>
                     ) : (
@@ -444,8 +457,11 @@ function SessionList({ sessions, ftp, editable, onEdit }) {
         <div key={i} className={`sess-${s.zone}`} style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: s.zone === 'rest' ? 0 : 4, flexWrap: 'wrap' }}>
             <span style={{ width: 34, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.6 }}>{s.day}</span>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</span>
-            {s.zone !== 'rest' && <span className="tag" style={{ marginLeft: 'auto' }}>{ZONE_LABEL[s.zone]}</span>}
+            <span style={{ fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              {(s.sport && s.sport !== 'bike') && <i className={`ti ${SPORTS[s.sport]?.icon || ''}`} aria-hidden="true" />}
+              {s.name}
+            </span>
+            {s.zone !== 'rest' && <span className="tag" style={{ marginLeft: 'auto' }}>{s.sport === 'brick' ? 'Brick' : ZONE_LABEL[s.zone]}</span>}
           </div>
           {s.zone !== 'rest' && <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{s.desc}</div>}
           {editable && (
