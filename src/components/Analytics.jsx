@@ -3,11 +3,61 @@
 // at-a-glance; everything data-oriented lives here.
 
 import { useMemo } from 'react'
-import { computeTrainingLoad } from '../lib/trainingLoad'
+import { computeTrainingLoad, estActivityTSS, activitySport } from '../lib/trainingLoad'
 import { projectLoad } from '../lib/weeklyPlanner'
 import { parseLocalDate } from '../lib/schedule'
+import { SPORTS } from '../lib/sports'
 import PowerZones from './PowerZones'
 import RiderRadar from './RiderRadar'
+
+// Load by discipline over the last 4 weeks — makes a multi-sport athlete's mix
+// visible while the fitness number above stays combined (TSS is comparable
+// across sports). Real synced activities only; hidden until there's data.
+const SPORT_BAR = { bike: 'var(--zone-z2-bg)', run: 'var(--zone-z4-bg)', swim: 'var(--zone-z1-bg)' }
+function SportLoadCard({ activities, user }) {
+  const { rows, total } = useMemo(() => {
+    const opts = { thresholdPaceRun: user?.threshold_pace_run, cssSwim: user?.css_swim }
+    const since = Date.now() - 28 * 86400000
+    const byS = { bike: 0, run: 0, swim: 0 }
+    ;(activities || []).forEach(a => {
+      if (!a.start_date || new Date(a.start_date).getTime() < since) return
+      const sp = activitySport(a)
+      byS[sp] = (byS[sp] || 0) + estActivityTSS(a, user?.ftp, user?.max_hr, opts)
+    })
+    const total = byS.bike + byS.run + byS.swim
+    const rows = ['bike', 'run', 'swim'].filter(s => byS[s] > 0).map(s => ({ sport: s, tss: byS[s] }))
+    return { rows, total }
+  }, [activities, user])
+
+  // Only worth showing once the athlete actually trains more than one sport.
+  if (total <= 0 || rows.length < 2) return null
+
+  return (
+    <div className="card">
+      <h2>Load by sport · last 4 weeks</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
+        {rows.map(({ sport, tss }) => {
+          const pct = Math.round((tss / total) * 100)
+          return (
+            <div key={sport}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 4 }}>
+                <i className={`ti ${SPORTS[sport]?.icon || ''}`} aria-hidden="true" />
+                <span style={{ fontWeight: 600 }}>{SPORTS[sport]?.label}</span>
+                <span style={{ marginLeft: 'auto', color: 'var(--color-text-muted)' }}>{tss} TSS · {pct}%</span>
+              </div>
+              <div style={{ height: 8, borderRadius: 6, background: 'var(--color-surface2)', overflow: 'hidden' }}>
+                <div style={{ width: `${pct}%`, height: '100%', borderRadius: 6, background: SPORT_BAR[sport] }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <p style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 10, lineHeight: 1.5 }}>
+        Combined into the single fitness number above — load is comparable across disciplines.
+      </p>
+    </div>
+  )
+}
 
 function ProjectionChart({ series, events }) {
   if (!series || series.length < 2) return null
@@ -171,14 +221,21 @@ export default function Analytics({ user, ftpHistory = [], plan, sessionState = 
     planStart, currentWeekNum: realCurrentWeek, events, user, plannedWeeks,
   }), [loadCtx, planStart, realCurrentWeek, events, user, plannedWeeks])
 
+  // The rider radar + power zones are power-specific; only surface them when
+  // there's actually power data / an FTP, so runners aren't shown empty charts.
+  const hasPower = useMemo(
+    () => (activities || []).some(a => a.weighted_avg_watts || a.avg_watts || a.streams?.watts),
+    [activities])
+
   return (
     <div>
       <div className="ov-cols">
         <TrainingLoadCard plan={plan} sessionState={sessionState} activities={activities} user={user} planStart={planStart} />
         <ProjectionChart series={projection} events={events} />
       </div>
-      <RiderRadar activities={activities} ftp={user?.ftp} ctl={loadCtx?.currentCtl} />
-      <PowerZones user={user} ftpHistory={ftpHistory} />
+      <SportLoadCard activities={activities} user={user} />
+      {hasPower && <RiderRadar activities={activities} ftp={user?.ftp} ctl={loadCtx?.currentCtl} />}
+      {user?.ftp && <PowerZones user={user} ftpHistory={ftpHistory} />}
     </div>
   )
 }
