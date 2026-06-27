@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { RPE_LABELS, getZoneWatts } from '../lib/planGenerator'
 import { getSessionDate } from '../lib/schedule'
 import { matchActivityToDate } from '../lib/strava'
-import { ZONE_OPTIONS, ZONE_META, buildWorkout } from '../lib/weeklyPlanner'
+import { ZONE_OPTIONS, ZONE_META, buildWorkout, buildStrength } from '../lib/weeklyPlanner'
 import ActivityDetail from './ActivityDetail'
 
 const fmtMin = m => (m >= 90 ? `${Math.round(m / 30) * 30 / 60} hr` : `${m} min`)
@@ -113,6 +113,34 @@ function IntervalProfile({ segments }) {
           />
         )
       })}
+    </div>
+  )
+}
+
+// Expanded strength session: warm-up → main lifts → accessory → core →
+// cool-down, each move with its sets×reps. Mirrors buildStrength's structure.
+function StrengthDetail({ session }) {
+  const plan = buildStrength(session.durationMin)
+  return (
+    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {plan.blocks.map(block => (
+        <div key={block.kind}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.6, marginBottom: 5 }}>
+            {block.label}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {block.items.map((it, i) => (
+              <div key={i}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>{it.name}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', opacity: 0.85 }}>{it.detail}</span>
+                </div>
+                {it.note && <div style={{ fontSize: 11, opacity: 0.7, lineHeight: 1.4, marginTop: 1 }}>{it.note}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -309,6 +337,8 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                     <IntervalProfile segments={wk.segments} />
                                     <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.9, marginTop: 8 }}>{wk.breakdown}</div>
                                   </div>
+                                ) : session.zone === 'strength' ? (
+                                  <StrengthDetail session={session} />
                                 ) : (
                                   <SteadyTargets zone={session.zone} ftp={user?.ftp} maxHr={user?.max_hr} />
                                 )}

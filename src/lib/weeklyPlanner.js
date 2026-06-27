@@ -270,6 +270,52 @@ export function buildWorkout(zone, totalMin, ftp) {
 // Default duration for an opt-in strength session.
 const STRENGTH_MIN = 40
 
+// Turn a strength session's duration into a concrete, cyclist-focused
+// prescription: warm-up → compound main lifts → accessory → core → cool-down.
+// Volume (sets / number of accessory + core moves) scales with the time you've
+// set, mirroring how buildWorkout derives intervals — so every strength session
+// expands to real detail without storing anything extra on the session.
+export function buildStrength(totalMin) {
+  const total = clamp(Math.round(totalMin || STRENGTH_MIN), 20, 75)
+  const sets = total >= 60 ? 4 : total >= 38 ? 3 : 2
+  const accSets = Math.max(2, sets - 1)
+  const nAcc = total >= 60 ? 3 : total >= 38 ? 2 : 1
+  const nCore = total >= 55 ? 3 : 2
+
+  const main = [
+    { name: 'Back squat', reps: '6–8', note: 'Drive through mid-foot, knees tracking over toes.' },
+    { name: 'Romanian deadlift', reps: '8', note: 'Hinge from the hips, flat back — load the hamstrings.' },
+  ]
+  const accessory = [
+    { name: 'Bulgarian split squat', reps: '8 / leg', note: 'Single-leg strength + balance for a steadier pedal stroke.' },
+    { name: 'Step-ups', reps: '10 / leg' },
+    { name: 'Standing calf raise', reps: '15' },
+  ]
+  const core = [
+    { name: 'Plank', detail: `${sets} × 45 s` },
+    { name: 'Dead bug', detail: `${sets} × 10 / side` },
+    { name: 'Side plank', detail: `${accSets} × 30 s / side` },
+  ]
+
+  return {
+    total,
+    summary: `${sets} × compound + core`,
+    blocks: [
+      { kind: 'warmup', label: 'Warm-up · ~8 min', items: [
+        { name: 'Leg swings + hip openers', detail: '2 min' },
+        { name: 'Bodyweight squats', detail: '2 × 10' },
+        { name: 'Glute bridges', detail: '2 × 12' },
+      ] },
+      { kind: 'main', label: 'Main lifts', items: main.map(x => ({ name: x.name, detail: `${sets} × ${x.reps}`, note: x.note })) },
+      { kind: 'accessory', label: 'Accessory', items: accessory.slice(0, nAcc).map(x => ({ name: x.name, detail: `${accSets} × ${x.reps}`, note: x.note })) },
+      { kind: 'core', label: 'Core', items: core.slice(0, nCore) },
+      { kind: 'cooldown', label: 'Cool-down · ~5 min', items: [
+        { name: 'Quad + hip-flexor stretch', detail: '5 min' },
+      ] },
+    ],
+  }
+}
+
 // Per-day length tiers → minutes. Coarse up front; fine-tune in the draft.
 export const TIER_MIN = { S: 45, M: 90, L: 150 }
 export const TIER_LABEL = { S: 'Short', M: 'Med', L: 'Long' }
