@@ -422,30 +422,77 @@ function hardZone(i, focus, length) {
   return i % 2 === 0 ? 'z4' : 'z3'
 }
 
+// Triathlon discipline assignment: spread swim/bike/run across the chosen days
+// with one weekend brick. Deterministic so re-planning is stable.
+function assignTriSports(onDays, target) {
+  const out = {}
+  const weekend = onDays.filter(d => d === 'Sat' || d === 'Sun')
+  const weekday = onDays.filter(d => d !== 'Sat' && d !== 'Sun')
+
+  // A brick on a weekend day (Sat preferred), except in a recovery week.
+  let brickDay = null
+  if (!target.isRecovery && weekend.length) {
+    brickDay = weekend.includes('Sat') ? 'Sat' : weekend[0]
+    out[brickDay] = 'brick'
+  }
+  // Long bike on any other weekend day.
+  weekend.filter(d => d !== brickDay).forEach(d => { out[d] = 'bike' })
+
+  // Weekdays round-robin run → swim → bike (run carries most weekly volume),
+  // which also keeps the same discipline from landing three days running.
+  const cycle = ['run', 'swim', 'bike']
+  weekday.forEach((d, i) => { out[d] = cycle[i % cycle.length] })
+
+  // Guarantee a swim if there's room for one and the rotation missed it.
+  if (onDays.length >= 3 && !Object.values(out).includes('swim')) {
+    const swap = weekday.find(d => out[d] === 'bike') || weekday[0]
+    if (swap) out[swap] = 'swim'
+  }
+  return out
+}
+
+// The discipline each chosen day will be — single-sport everywhere, or the tri
+// spread. Exported so the planner UI can preview the same badges draftWeek uses.
+export function sportsForWeek(inputs, target, goalSport = 'bike') {
+  const onDays = DAY_NAMES.filter(d => (inputs?.days || {})[d])
+  if (goalSport === 'tri') return assignTriSports(onDays, target)
+  return Object.fromEntries(onDays.map(d => [d, goalSport === 'run' ? 'run' : 'bike']))
+}
+
 // Lay the week out directly from your per-day choices: each on-day carries a
 // length (S/M/L) and a type (easy/hard). Off-days are rest. A recovery week
-// forces everything easy.
-export function draftWeek(target, inputs, ftp) {
+// forces everything easy. `goalSport` ('bike' | 'run' | 'tri') comes from the
+// event being trained for; tri weeks mix all three disciplines.
+export function draftWeek(target, inputs, ftp, goalSport = 'bike') {
   const days = inputs?.days || {}
   const focus = inputs?.focus || 'none'
   const onDays = DAY_NAMES.filter(d => days[d])
   if (!onDays.length) return DAY_NAMES.map(restDay)
 
-  // Long ride = the longest easy day.
+  // Per-day discipline: single-sport everywhere, or the tri spread.
+  const sportByDay = sportsForWeek(inputs, target, goalSport)
+
+  // Long session = the longest easy day, but never a swim or brick day.
   const longEasy = onDays
-    .filter(d => (days[d].type || 'easy') === 'easy')
+    .filter(d => (days[d].type || 'easy') === 'easy' && sportByDay[d] !== 'swim' && sportByDay[d] !== 'brick')
     .sort((a, b) => TIER_MIN[days[b].length] - TIER_MIN[days[a].length])[0]
 
   let hardSeen = 0
   const byDay = {}
   onDays.forEach(day => {
+    const sport = sportByDay[day]
     const { length = 'M', type = 'easy' } = days[day]
-    const minutes = TIER_MIN[length] || 90
+    let minutes = TIER_MIN[length] || 90
+    if (sport === 'brick') { // split the day ~70% bike / 30% run
+      byDay[day] = buildBrick(day, Math.round(minutes * 0.7), Math.round(minutes * 0.3), ftp)
+      return
+    }
+    if (sport === 'swim') minutes = Math.min(minutes, 75) // swims don't run long
     let zone
     if (target.isRecovery) zone = minutes <= 45 ? 'z1' : 'z2'
     else if (type === 'hard') zone = hardZone(hardSeen++, focus, length)
     else zone = minutes <= 45 ? 'z1' : 'z2'
-    byDay[day] = buildSession(day, zone, minutes, ftp, day === longEasy && zone === 'z2')
+    byDay[day] = buildSession(day, zone, minutes, ftp, day === longEasy && zone === 'z2', sport)
   })
 
   // Optional strength: drop 1–2 sessions onto otherwise-rest days, preferring
