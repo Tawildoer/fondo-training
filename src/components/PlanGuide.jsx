@@ -23,6 +23,7 @@ const ZONE_META = [
   { key: 'z3', label: 'Z3 — Tempo',       cssClass: 'sess-z3', pct: '76–90% FTP', feel: 'Moderately hard. Talking is difficult.' },
   { key: 'z4', label: 'Z4 — Threshold',   cssClass: 'sess-z4', pct: '91–105% FTP', feel: 'Hard but controlled. This is race-winning fitness.' },
   { key: 'z5', label: 'Z5 — VO₂ max',    cssClass: 'sess-z5', pct: '106–120% FTP', feel: 'Very hard. Short efforts only. Used in race simulation.' },
+  { key: 'strength', label: 'Strength',   cssClass: 'sess-strength', pct: 'Off the bike', feel: 'Compound lifts + core. Optional, offered when no event is near.' },
 ]
 
 function Section({ title, children }) {

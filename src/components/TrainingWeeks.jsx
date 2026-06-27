@@ -344,7 +344,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                     {editKey === `${week.num}_${idx}` ? ' Done editing' : ' Edit session'}
                                   </button>
                                 )}
-                                {onDownloadZwo && user?.ftp && (
+                                {onDownloadZwo && user?.ftp && session.zone !== 'strength' && (
                                   <button
                                     onClick={e => { stop(e); onDownloadZwo(session, week.num, idx) }}
                                     style={{

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { localDateStr, nextEvent, prevEvent } from '../lib/schedule'
 import {
   computeWeekTarget, draftWeek, projectCtl, buildSession,
-  ZONE_OPTIONS, DAY_NAMES, TIER_MIN, TIER_LABEL,
+  ZONE_OPTIONS, DAY_NAMES, TIER_MIN, TIER_LABEL, strengthEligible,
 } from '../lib/weeklyPlanner'
 
 const LENGTHS = ['S', 'M', 'L']
@@ -46,7 +46,7 @@ function fmtTime(v) {
   return v >= 90 ? `${v / 60} hr` : `${v} min`
 }
 
-const ZONE_LABEL = { z1: 'Recovery', z2: 'Endurance', z3: 'Sweet spot', z4: 'Threshold', z5: 'VO₂', rest: 'Rest' }
+const ZONE_LABEL = { z1: 'Recovery', z2: 'Endurance', z3: 'Sweet spot', z4: 'Threshold', z5: 'VO₂', strength: 'Strength', rest: 'Rest' }
 
 // How many quality (hard) days a week should carry, by event proximity / goal.
 function recommendedHardDays(weeksToEvent, goal, weeksSinceEvent) {
@@ -91,6 +91,7 @@ function defaultInputs(plannedWeeks, user, minHard = 2) {
       days: { ...latestDays },
       goal: latest.inputs.goal || user.fitness_goal || 'build',
       focus: latest.inputs.focus || 'none',
+      strength: latest.inputs.strength || 0, // carry the rider's strength choice
       freshness: 3, busy: false, // momentary signals reset each week
     }
   } else {
@@ -101,7 +102,7 @@ function defaultInputs(plannedWeeks, user, minHard = 2) {
     order.slice(0, n).forEach(d => {
       days[d] = d === 'Sat' ? { length: 'L', type: 'easy' } : { length: 'M', type: 'easy' }
     })
-    base = { days, goal: user.fitness_goal || 'build', focus: 'none', freshness: 3, busy: false }
+    base = { days, goal: user.fitness_goal || 'build', focus: 'none', strength: 0, freshness: 3, busy: false }
   }
   return ensureHardDays(base, minHard)
 }
@@ -222,6 +223,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
       goal: existing.inputs.goal || 'build',
       freshness: existing.inputs.freshness ?? 3,
       focus: existing.inputs.focus || 'none',
+      strength: existing.inputs.strength || 0,
       busy: !!existing.inputs.busy,
     })
     setEditing(true)
@@ -274,7 +276,10 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                   <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
                     ~{suggestion.targetHours} h
                   </span>
-                  <span style={{ fontSize: 12, opacity: 0.85 }}>≈ {suggestion.targetTss} TSS · you've set {totalHours} h</span>
+                  <span style={{ fontSize: 12, opacity: 0.85 }}>
+                    ≈ {suggestion.targetTss} TSS · you've set {totalHours} h
+                    {inputs.strength > 0 && ` · +${inputs.strength} strength`}
+                  </span>
                 </div>
                 <div style={{ fontSize: 12, opacity: 0.9, marginTop: 3, lineHeight: 1.4 }}>{suggestion.note}</div>
                 {carryIn > 0 && (
@@ -367,6 +372,20 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                 options={[{ v: 'maintain', label: 'Maintain' }, { v: 'build', label: 'Build' }]}
               />
             </div>
+
+            {/* Strength is offered only with no event on the near horizon — the
+                base/off-season window where durability work off the bike pays off. */}
+            {strengthEligible(weeksToEvent) && (
+              <div className="field" style={{ marginBottom: 12 }}>
+                <label><i className="ti ti-barbell" aria-hidden="true" /> Strength sessions</label>
+                <Segmented
+                  value={inputs.strength || 0}
+                  onChange={v => setInputs(p => ({ ...p, strength: v }))}
+                  options={[{ v: 0, label: 'Off' }, { v: 1, label: '1× / wk' }, { v: 2, label: '2× / wk' }]}
+                />
+                <div className="hint">Added on rest days, away from your hard rides — no extra cycling load.</div>
+              </div>
+            )}
 
             {/* Secondary, optional choices tucked away to keep things light */}
             <button className="btn btn-sm" onClick={() => setShowDetails(s => !s)} style={{ marginBottom: showDetails ? 14 : 0 }}>

@@ -53,7 +53,8 @@ export function estActivityTSS(activity, ftp, maxHr) {
 // The *prescribed* TSS for a session (zone + duration only) — independent of
 // completion/RPE. Used for planned-vs-actual comparisons.
 export function plannedLoad(session) {
-  if (!session || session.zone === 'rest') return 0
+  // Strength carries no power-based TSS — keep the PMC honest.
+  if (!session || session.zone === 'rest' || session.zone === 'strength') return 0
   const minutes = parseLeadingMinutes(session.desc) || 45
   const IF = ZONE_IF[session.zone] || 0.65
   return Math.round((minutes / 60) * IF * IF * 100)
@@ -61,7 +62,7 @@ export function plannedLoad(session) {
 
 // Estimated TSS for a completed planned session (the no-ride fallback).
 export function estSessionLoad(session, state) {
-  if (!session || session.zone === 'rest') return 0
+  if (!session || session.zone === 'rest' || session.zone === 'strength') return 0
   if (!state?.completed) return 0
   const minutes = parseLeadingMinutes(session.desc) || 45
   const IF = ZONE_IF[session.zone] || 0.65

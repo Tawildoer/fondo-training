@@ -406,7 +406,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
     if (!user.ftp) return []
     const today0 = new Date(); today0.setHours(0, 0, 0, 0)
     return getScheduledSessions(plan, { base: planStart })
-      .filter(s => s.session.zone !== 'rest' && s.date >= today0 && s.weekNum <= realCurrentWeek + 1)
+      .filter(s => s.session.zone !== 'rest' && s.session.zone !== 'strength' && s.date >= today0 && s.weekNum <= realCurrentWeek + 1)
       .map(s => ({
         weekNum: s.weekNum,
         idx: s.idx,

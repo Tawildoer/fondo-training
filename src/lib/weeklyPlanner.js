@@ -15,9 +15,18 @@ const ZONE_IF = { z1: 0.45, z2: 0.65, z3: 0.83, z4: 0.98, z5: 1.13 }
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 // TSS for a zone held for `minutes`. Mirrors trainingLoad.js's model.
+// Strength is a non-cycling stimulus — it carries no power-based TSS.
 export function tssFor(zone, minutes) {
+  if (zone === 'strength') return 0
   const IF = ZONE_IF[zone] || 0.65
   return Math.round((minutes / 60) * IF * IF * 100)
+}
+
+// Strength sessions are offered when no event is within 5 weeks (or there's no
+// event at all) — the open-ended base/off-season window where durability work
+// off the bike adds the most. Threshold lives here so UI + model agree.
+export function strengthEligible(weeksToEvent) {
+  return weeksToEvent == null || weeksToEvent >= 5
 }
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
@@ -154,6 +163,16 @@ const restDay = day => ({ day, name: 'Rest', zone: 'rest', desc: 'Full rest. Sle
 // Build a single session (used by the draft and by the inline editor).
 export function buildSession(day, zone, minutes, ftp, isLong = false) {
   if (zone === 'rest') return restDay(day)
+  if (zone === 'strength') {
+    const sm = clamp(Math.round(minutes / 5) * 5, ZONE_META.strength.min, ZONE_META.strength.max)
+    return {
+      day,
+      zone: 'strength',
+      name: 'Strength',
+      desc: `${fmtDur(sm)} strength & conditioning. Compound lifts + core — build durability off the bike.`,
+      durationMin: sm,
+    }
+  }
   const meta = ZONE_META[zone] || ZONE_META.z2
   const min = clamp(Math.round(minutes / 5) * 5, 10, meta.max)
   return {
@@ -180,6 +199,7 @@ export const ZONE_META = {
   z3: { name: 'Sweet spot', min: 45, max: 120 },
   z4: { name: 'Threshold intervals', min: 40, max: 90 },
   z5: { name: 'VO₂ intervals', min: 35, max: 75 },
+  strength: { name: 'Strength', min: 20, max: 75 },
 }
 
 function fmtDur(min) {
@@ -247,6 +267,9 @@ export function buildWorkout(zone, totalMin, ftp) {
   }
 }
 
+// Default duration for an opt-in strength session.
+const STRENGTH_MIN = 40
+
 // Per-day length tiers → minutes. Coarse up front; fine-tune in the draft.
 export const TIER_MIN = { S: 45, M: 90, L: 150 }
 export const TIER_LABEL = { S: 'Short', M: 'Med', L: 'Long' }
@@ -284,6 +307,23 @@ export function draftWeek(target, inputs, ftp) {
     else zone = minutes <= 45 ? 'z1' : 'z2'
     byDay[day] = buildSession(day, zone, minutes, ftp, day === longEasy && zone === 'z2')
   })
+
+  // Optional strength: drop 1–2 sessions onto otherwise-rest days, preferring
+  // days furthest from a demanding ride (hard intervals or the long ride) so
+  // they don't blunt key sessions. Never touches a ride day.
+  const wantStrength = clamp(Math.round(inputs?.strength || 0), 0, 2)
+  if (wantStrength > 0) {
+    const idxOf = d => DAY_NAMES.indexOf(d)
+    const demanding = onDays
+      .filter(d => ['z4', 'z5'].includes(byDay[d]?.zone) || d === longEasy)
+      .map(idxOf)
+    const distToDemand = i => demanding.length ? Math.min(...demanding.map(d => Math.abs(d - i))) : 99
+    const restIdx = DAY_NAMES.map((_, i) => i).filter(i => !byDay[DAY_NAMES[i]])
+    restIdx
+      .sort((a, b) => distToDemand(b) - distToDemand(a) || a - b) // furthest from hard, then earliest
+      .slice(0, wantStrength)
+      .forEach(i => { byDay[DAY_NAMES[i]] = buildSession(DAY_NAMES[i], 'strength', STRENGTH_MIN, ftp) })
+  }
 
   return DAY_NAMES.map(day => byDay[day] || restDay(day))
 }
@@ -361,7 +401,7 @@ export function projectLoad({ currentCtl = 0, recentWeeklyTss = 0, planStart, cu
 // Total prescribed TSS of a drafted/edited session list (for the "why" panel).
 export function weekTss(sessions) {
   return (sessions || []).reduce((s, x) => {
-    if (!x || x.zone === 'rest') return s
+    if (!x || x.zone === 'rest' || x.zone === 'strength') return s
     const minutes = x.durationMin != null ? x.durationMin
       : (() => { const m = x.desc?.match(/^(\d+(?:\.\d+)?)\s*(hr|hrs|hour|hours|min|mins|minutes)/i); return m ? (m[2][0].toLowerCase() === 'h' ? +m[1] * 60 : +m[1]) : 0 })()
     return s + tssFor(x.zone, minutes)

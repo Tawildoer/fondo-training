@@ -26,7 +26,7 @@ function sessionMinutes(s) {
 }
 
 function sessionTss(s) {
-  if (!s || s.zone === 'rest') return 0
+  if (!s || s.zone === 'rest' || s.zone === 'strength') return 0
   return tssFor(s.zone, sessionMinutes(s))
 }
 
@@ -91,7 +91,8 @@ function pourVolume(sessions, absorbers, need, ftp) {
 export function rebalanceForBail({ week, nextWeek, bailedIdx, planStart, ftp, today = new Date() }) {
   const sessions = (week?.sessions || []).map(s => ({ ...s }))
   const bailed = sessions[bailedIdx]
-  if (!bailed || bailed.zone === 'rest') return null
+  // Strength carries no cycling load — bailing one needs no ride rebalance.
+  if (!bailed || bailed.zone === 'rest' || bailed.zone === 'strength') return null
   const deficit = sessionTss(bailed)
   if (deficit <= 0) return null
 

@@ -41,6 +41,7 @@
   --zone-z3-bg: linear-gradient(135deg, #5E4FCC, #9171F2);  --zone-z3-fg: #ffffff; /* sweet spot — violet */
   --zone-z4-bg: linear-gradient(135deg, #F0A81E, #FFD23F);  --zone-z4-fg: #241f0e; /* threshold — electric yellow */
   --zone-z5-bg: linear-gradient(135deg, #C8392A, #FF6F4D);  --zone-z5-fg: #ffffff; /* VO₂ — coral */
+  --zone-strength-bg: linear-gradient(135deg, #3A4252, #5A6478);  --zone-strength-fg: #ffffff; /* strength — steel (not a power zone) */
   --radius: 10px;
   --radius-sm: 6px;
   /* Widget height standard: 1 unit ≈ a small note/indicator, 3 ≈ a graph. */
@@ -436,6 +437,7 @@ img, svg, video, canvas { max-width: 100%; }
 .sess-z3 { background: var(--zone-z3-bg); color: var(--zone-z3-fg); }
 .sess-z4 { background: var(--zone-z4-bg); color: var(--zone-z4-fg); }
 .sess-z5 { background: var(--zone-z5-bg); color: var(--zone-z5-fg); }
+.sess-strength { background: var(--zone-strength-bg); color: var(--zone-strength-fg); }
 
 /* ── Overview week strip + consistency heatmap ───────────── */
 .wk-strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
