@@ -239,6 +239,28 @@ export function buildBrick(day, bikeMin, runMin, ftp) {
   }
 }
 
+// A two-a-day: two independent sessions of different sports on one day (a
+// triathlon staple — e.g. a swim plus an easy ride). Unlike a brick they're not
+// back-to-back; the day's load is the sum of its parts (see multiTss). Rendered
+// in Training weeks as side-by-side half-width banners.
+const ZONE_RANK = ['z5', 'z4', 'z3', 'z2', 'z1'] // hardest → easiest
+export function buildMulti(day, parts, ftp) {
+  const built = parts.map(p => {
+    const s = buildSession(day, p.zone, p.durationMin, ftp, false, p.sport)
+    return { sport: p.sport, zone: s.zone, durationMin: s.durationMin, name: s.name, desc: s.desc }
+  })
+  const dom = [...built].map(b => b.zone).sort((a, b) => ZONE_RANK.indexOf(a) - ZONE_RANK.indexOf(b))[0] || 'z2'
+  return {
+    day,
+    sport: 'multi',
+    zone: dom, // representative effort for fallbacks
+    name: 'Two sessions',
+    desc: built.map(b => `${b.name} (${fmtDur(b.durationMin)})`).join(' + '),
+    durationMin: built.reduce((s, b) => s + b.durationMin, 0),
+    parts: built,
+  }
+}
+
 export const ZONE_OPTIONS = [
   { zone: 'z1', label: 'Z1 · Recovery' },
   { zone: 'z2', label: 'Z2 · Endurance' },
@@ -501,7 +523,11 @@ function allocateDays(weights, nDays) {
 // Assign a discipline to each chosen day from the weighted day-counts, spread
 // so the same sport doesn't stack three days running; when a triathlon is in
 // the mix (swim has days) one weekend bike becomes a brick.
-function assignSportsByWeight(onDays, weights, target) {
+// How many swim sessions a week we aim for when a triathlon is in the mix —
+// swimming rewards frequency, so we top up to this with two-a-days if needed.
+const SWIM_GOAL = 2
+
+function assignSportsByWeight(onDays, weights, target, days = {}) {
   const nDays = onDays.length
   if (!nDays) return {}
   const counts = allocateDays(weights, nDays)
@@ -522,15 +548,30 @@ function assignSportsByWeight(onDays, weights, target) {
   if (!target.isRecovery && counts.swim > 0) {
     const weekendBike = ['Sat', 'Sun'].find(d => out[d] === 'bike')
     if (weekendBike) out[weekendBike] = 'brick'
+
+    // Triathlon two-a-days: if single-sport days didn't give us enough swims,
+    // pair a swim onto the shortest easy ride/run days (leaving the long day
+    // alone) as a second session — out[day] becomes ['swim', baseSport].
+    let swims = onDays.filter(d => out[d] === 'swim').length
+    const candidates = onDays
+      .filter(d => (out[d] === 'bike' || out[d] === 'run') && (days[d]?.type || 'easy') === 'easy')
+      .sort((a, b) => (TIER_MIN[days[a]?.length] || 90) - (TIER_MIN[days[b]?.length] || 90))
+    for (const d of candidates) {
+      if (swims >= SWIM_GOAL) break
+      out[d] = ['swim', out[d]]
+      swims++
+    }
   }
   return out
 }
 
 // The discipline each chosen day will be, from the proximity-weighted blend.
+// A value can be a single sport, 'brick', or a two-sport array (a two-a-day).
 // Exported so the planner UI can preview the same badges draftWeek uses.
 export function sportsForWeek(inputs, target, weights) {
-  const onDays = DAY_NAMES.filter(d => (inputs?.days || {})[d])
-  return assignSportsByWeight(onDays, weights || { bike: 1, run: 0, swim: 0 }, target)
+  const days = inputs?.days || {}
+  const onDays = DAY_NAMES.filter(d => days[d])
+  return assignSportsByWeight(onDays, weights || { bike: 1, run: 0, swim: 0 }, target, days)
 }
 
 // Lay the week out directly from your per-day choices: each on-day carries a
@@ -546,9 +587,10 @@ export function draftWeek(target, inputs, ftp, weights) {
   // Per-day discipline from the proximity blend.
   const sportByDay = sportsForWeek(inputs, target, weights)
 
-  // Long session = the longest easy day, but never a swim or brick day.
+  // Long session = the longest easy day, but never a swim, brick or two-a-day.
+  const isSingle = d => typeof sportByDay[d] === 'string'
   const longEasy = onDays
-    .filter(d => (days[d].type || 'easy') === 'easy' && sportByDay[d] !== 'swim' && sportByDay[d] !== 'brick')
+    .filter(d => (days[d].type || 'easy') === 'easy' && isSingle(d) && sportByDay[d] !== 'swim' && sportByDay[d] !== 'brick')
     .sort((a, b) => TIER_MIN[days[b].length] - TIER_MIN[days[a].length])[0]
 
   let hardSeen = 0
@@ -559,6 +601,16 @@ export function draftWeek(target, inputs, ftp, weights) {
     let minutes = TIER_MIN[length] || 90
     if (sport === 'brick') { // split the day ~70% bike / 30% run
       byDay[day] = buildBrick(day, Math.round(minutes * 0.7), Math.round(minutes * 0.3), ftp)
+      return
+    }
+    if (Array.isArray(sport)) { // two-a-day: a swim plus an easy ride/run
+      const baseSport = sport[1]
+      const baseZone = minutes <= 45 ? 'z1' : 'z2'
+      const swimMin = clamp(Math.round(minutes * 0.5), 25, 45)
+      byDay[day] = buildMulti(day, [
+        { sport: 'swim', zone: target.isRecovery ? 'z1' : 'z2', durationMin: swimMin },
+        { sport: baseSport, zone: baseZone, durationMin: minutes },
+      ], ftp)
       return
     }
     if (sport === 'swim') minutes = Math.min(minutes, 75) // swims don't run long
@@ -664,6 +716,7 @@ export function weekTss(sessions) {
   return (sessions || []).reduce((s, x) => {
     if (!x || x.zone === 'rest' || x.zone === 'strength') return s
     if (x.sport === 'brick') return s + brickTss(x)
+    if (x.sport === 'multi') return s + multiTss(x)
     const minutes = x.durationMin != null ? x.durationMin
       : (() => { const m = x.desc?.match(/^(\d+(?:\.\d+)?)\s*(hr|hrs|hour|hours|min|mins|minutes)/i); return m ? (m[2][0].toLowerCase() === 'h' ? +m[1] * 60 : +m[1]) : 0 })()
     return s + tssFor(x.zone, minutes)
@@ -674,4 +727,9 @@ export function weekTss(sessions) {
 // effort/duration). Used wherever a session's load is summed.
 export function brickTss(session) {
   return (session?.legs || []).reduce((s, leg) => s + tssFor(leg.zone, leg.durationMin || 0), 0)
+}
+
+// Prescribed TSS of a two-a-day = the sum of its parts' load.
+export function multiTss(session) {
+  return (session?.parts || []).reduce((s, p) => s + tssFor(p.zone, p.durationMin || 0), 0)
 }

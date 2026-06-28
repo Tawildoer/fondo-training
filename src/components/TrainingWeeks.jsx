@@ -332,6 +332,73 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                     // stopPropagation so they don't also expand/collapse.
                     const stop = e => e.stopPropagation()
 
+                    // Two-a-day: one day, two separate sessions of different
+                    // sports — rendered as side-by-side half-width sport banners.
+                    if (session.parts) {
+                      return (
+                        <div key={idx} className="sess-row"
+                          role="button" tabIndex={0} aria-expanded={detailOpen}
+                          onClick={() => toggleDetail(key)}
+                          onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDetail(key) } }}
+                          style={{ borderRadius: 'var(--radius-sm)', padding: '10px 12px', background: 'var(--color-surface2)', border: '0.5px solid var(--color-border)', opacity: bailed ? 0.6 : 1, cursor: 'pointer' }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                            <div style={{ paddingTop: 2, width: 18, flexShrink: 0 }}>
+                              <input type="checkbox" checked={!!state.completed} onClick={stop}
+                                onChange={() => onToggle(week.num, idx, session.zone)}
+                                style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-accent)' }} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', opacity: 0.6 }}>{session.day}</span>
+                                <span style={{ fontSize: 13, fontWeight: 600, textDecoration: (state.completed || bailed) ? 'line-through' : 'none', opacity: (state.completed || bailed) ? 0.55 : 1 }}>Two sessions</span>
+                                {state.completed && <i className="ti ti-circle-check" style={{ fontSize: 14, opacity: 0.7 }} aria-hidden="true" />}
+                                {bailed && (
+                                  <span className="tag" style={{ background: 'var(--color-red-light)', color: 'var(--color-red-text)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                    <i className="ti ti-circle-x" style={{ fontSize: 12 }} aria-hidden="true" /> Missed
+                                  </span>
+                                )}
+                              </div>
+                              {/* Half-width banners — one per discipline that day */}
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                {session.parts.map((p, pi) => (
+                                  <div key={pi} className={`sess-${p.zone}`} style={{ flex: 1, minWidth: 0, borderRadius: 'var(--radius-sm)', padding: '8px 10px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', opacity: 0.85 }}>
+                                      <i className={`ti ${SPORTS[p.sport]?.icon || ''}`} aria-hidden="true" /> {SPORTS[p.sport]?.label}
+                                    </div>
+                                    <div style={{ fontSize: 12.5, fontWeight: 600, marginTop: 3 }}>{p.name}</div>
+                                    <div style={{ fontSize: 11, opacity: 0.8, marginTop: 1 }}>{fmtMin(p.durationMin)}</div>
+                                  </div>
+                                ))}
+                              </div>
+                              {detailOpen && (
+                                <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                  {session.parts.map((p, pi) => (
+                                    <div key={pi}>
+                                      <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.7, marginBottom: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
+                                        <i className={`ti ${SPORTS[p.sport]?.icon || ''}`} aria-hidden="true" /> {p.name} · {fmtMin(p.durationMin)}
+                                      </div>
+                                      <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{p.desc}</div>
+                                      {p.sport === 'swim'
+                                        ? <BlockDetail blocks={buildSwimSets(p.zone, p.durationMin).blocks} />
+                                        : <SteadyTargets zone={p.zone} sport={p.sport} ftp={user?.ftp} maxHr={user?.max_hr} thresholdPaceRun={user?.threshold_pace_run} cssSwim={user?.css_swim} />}
+                                    </div>
+                                  ))}
+                                  {!state.completed && (
+                                    <button onClick={e => { stop(e); onBail(week.num, idx, session.zone) }}
+                                      style={{ alignSelf: 'flex-start', display: 'inline-flex', gap: 5, alignItems: 'center', cursor: 'pointer', fontFamily: 'inherit', background: 'none', border: 'none', padding: 0, fontSize: 11, fontWeight: 600, color: bailed ? 'inherit' : 'var(--color-red-text)', opacity: bailed ? 0.55 : 0.85, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                      {bailed
+                                        ? <><i className="ti ti-arrow-back-up" style={{ fontSize: 13 }} aria-hidden="true" /> Un-mark missed</>
+                                        : <><i className="ti ti-circle-x" style={{ fontSize: 13 }} aria-hidden="true" /> Bail</>}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    }
+
                     return (
                       <div key={idx} className={`sess-${session.zone} sess-row`}
                         role={expandable ? 'button' : undefined}

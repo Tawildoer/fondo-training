@@ -9,7 +9,7 @@
 // remaining days, capped by a per-day ceiling and spacing; else (C) spill to
 // next week. Anything that still won't fit is reported as unrecoverable.
 
-import { tssFor, buildSession } from './weeklyPlanner'
+import { tssFor, buildSession, brickTss, multiTss } from './weeklyPlanner'
 import { getSessionDate, DAY_OFFSETS } from './schedule'
 
 const HARD = new Set(['z3', 'z4', 'z5'])
@@ -27,6 +27,8 @@ function sessionMinutes(s) {
 
 function sessionTss(s) {
   if (!s || s.zone === 'rest' || s.zone === 'strength') return 0
+  if (s.sport === 'brick') return brickTss(s)
+  if (s.sport === 'multi') return multiTss(s)
   return tssFor(s.zone, sessionMinutes(s))
 }
 
@@ -92,7 +94,8 @@ export function rebalanceForBail({ week, nextWeek, bailedIdx, planStart, ftp, to
   const sessions = (week?.sessions || []).map(s => ({ ...s }))
   const bailed = sessions[bailedIdx]
   // Strength carries no cycling load — bailing one needs no ride rebalance.
-  if (!bailed || bailed.zone === 'rest' || bailed.zone === 'strength') return null
+  // Strength, brick and two-a-day sessions don't drive the cycling rebalance.
+  if (!bailed || bailed.zone === 'rest' || bailed.zone === 'strength' || bailed.sport === 'brick' || bailed.sport === 'multi') return null
   const deficit = sessionTss(bailed)
   if (deficit <= 0) return null
 

@@ -56,10 +56,10 @@ export function matchActivityToDate(activities, date, sport = null) {
   const key = localKey(date)
   const sameDay = (activities || []).filter(a => a.start_date && a.start_date.slice(0, 10) === key)
   if (!sameDay.length) return null
-  if (sport && sport !== 'brick') {
+  if (sport && sport !== 'brick' && sport !== 'multi') {
     return sameDay.find(a => activitySport(a) === sport) || null
   }
-  return sameDay[0]
+  return sameDay[0] // compound days (brick / two-a-day) match any activity that day
 }
 
 // Non-rest sessions on or before today that have a matching Strava ride and

@@ -361,7 +361,12 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                           options={[{ v: 'easy', label: 'Easy' }, { v: 'hard', label: 'Hard' }]} />
                         {multiSport && sportByDay[day] && (
                           <span title="Auto-assigned by event proximity" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--color-accent-text)' }}>
-                            <i className={`ti ${SPORTS[sportByDay[day]]?.icon || ''}`} aria-hidden="true" /> {SPORTS[sportByDay[day]]?.label}
+                            {(Array.isArray(sportByDay[day]) ? sportByDay[day] : [sportByDay[day]]).map((sp, si) => (
+                              <span key={sp} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                {si > 0 && <span style={{ opacity: 0.5 }}>+</span>}
+                                <i className={`ti ${SPORTS[sp]?.icon || ''}`} aria-hidden="true" /> {SPORTS[sp]?.label}
+                              </span>
+                            ))}
                           </span>
                         )}
                         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-faint)' }}>{fmtTime(TIER_MIN[d.length])}</span>
@@ -459,10 +464,12 @@ function SessionList({ sessions, ftp, editable, onEdit }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: s.zone === 'rest' ? 0 : 4, flexWrap: 'wrap' }}>
             <span style={{ width: 34, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.6 }}>{s.day}</span>
             <span style={{ fontSize: 13, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-              {(s.sport && s.sport !== 'bike') && <i className={`ti ${SPORTS[s.sport]?.icon || ''}`} aria-hidden="true" />}
+              {s.parts
+                ? s.parts.map(p => <i key={p.sport} className={`ti ${SPORTS[p.sport]?.icon || ''}`} aria-hidden="true" />)
+                : (s.sport && s.sport !== 'bike') && <i className={`ti ${SPORTS[s.sport]?.icon || ''}`} aria-hidden="true" />}
               {s.name}
             </span>
-            {s.zone !== 'rest' && <span className="tag" style={{ marginLeft: 'auto' }}>{s.sport === 'brick' ? 'Brick' : ZONE_LABEL[s.zone]}</span>}
+            {s.zone !== 'rest' && <span className="tag" style={{ marginLeft: 'auto' }}>{s.sport === 'brick' ? 'Brick' : s.sport === 'multi' ? '2 sessions' : ZONE_LABEL[s.zone]}</span>}
           </div>
           {s.zone !== 'rest' && <div style={{ fontSize: 12, lineHeight: 1.5, opacity: 0.85 }}>{s.desc}</div>}
           {editable && (

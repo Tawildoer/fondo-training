@@ -77,23 +77,33 @@ export function estActivityTSS(activity, ftp, maxHr, opts = {}) {
   return Math.round(durH * 0.65 * 0.65 * 100)
 }
 
+// Load of one zone+duration component (a session, brick leg or two-a-day part).
+const partLoad = (zone, minutes) => { const IF = ZONE_IF[zone] || 0.65; return (minutes / 60) * IF * IF * 100 }
+// Sum of a compound session's sub-efforts (brick legs / two-a-day parts).
+const compoundLoad = session => (session.legs || session.parts || [])
+  .reduce((s, p) => s + partLoad(p.zone, p.durationMin || 0), 0)
+
 // The *prescribed* TSS for a session (zone + duration only) — independent of
 // completion/RPE. Used for planned-vs-actual comparisons.
 export function plannedLoad(session) {
   // Strength carries no power-based TSS — keep the PMC honest.
   if (!session || session.zone === 'rest' || session.zone === 'strength') return 0
+  if (session.legs || session.parts) return Math.round(compoundLoad(session))
   const minutes = parseLeadingMinutes(session.desc) || 45
-  const IF = ZONE_IF[session.zone] || 0.65
-  return Math.round((minutes / 60) * IF * IF * 100)
+  return Math.round(partLoad(session.zone, minutes))
 }
 
 // Estimated TSS for a completed planned session (the no-ride fallback).
 export function estSessionLoad(session, state) {
   if (!session || session.zone === 'rest' || session.zone === 'strength') return 0
   if (!state?.completed) return 0
-  const minutes = parseLeadingMinutes(session.desc) || 45
-  const IF = ZONE_IF[session.zone] || 0.65
-  let tss = (minutes / 60) * IF * IF * 100
+  let tss
+  if (session.legs || session.parts) {
+    tss = compoundLoad(session)
+  } else {
+    const minutes = parseLeadingMinutes(session.desc) || 45
+    tss = partLoad(session.zone, minutes)
+  }
   if (state.rpe) tss *= 0.8 + (state.rpe - 3) * 0.1 // rpe1 ×0.6 … rpe5 ×1.2
   return Math.round(tss)
 }
