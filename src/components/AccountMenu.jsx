@@ -45,6 +45,13 @@ const parseMMSS = str => {
   return parseInt(m[1]) * 60 + parseInt(m[2])
 }
 
+const RIDER_TYPES = [
+  { v: 'all_rounder', label: 'All-rounder' },
+  { v: 'sprinter', label: 'Sprinter' },
+  { v: 'climber', label: 'Climber' },
+  { v: 'time_trialist', label: 'Time trialist' },
+]
+
 function SettingsSection({ user, onUpdateProfile, onUpdateFTP }) {
   const init = () => ({
     ftp: user.ftp ?? '',
@@ -54,11 +61,12 @@ function SettingsSection({ user, onUpdateProfile, onUpdateFTP }) {
     weekly_hours_start: user.weekly_hours_start ?? '',
     days_per_week: user.days_per_week ?? '',
     fitness_goal: user.fitness_goal || 'build',
+    riding_strength: user.riding_strength || 'all_rounder',
   })
   const [form, setForm] = useState(init)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  useEffect(() => { setForm(init()) }, [user.ftp, user.max_hr, user.threshold_pace_run, user.css_swim, user.weekly_hours_start, user.days_per_week, user.fitness_goal])
+  useEffect(() => { setForm(init()) }, [user.ftp, user.max_hr, user.threshold_pace_run, user.css_swim, user.weekly_hours_start, user.days_per_week, user.fitness_goal, user.riding_strength])
   const set = (k, v) => { setForm(f => ({ ...f, [k]: v })); setSaved(false) }
 
   async function save() {
@@ -72,6 +80,7 @@ function SettingsSection({ user, onUpdateProfile, onUpdateFTP }) {
       weekly_hours_start: form.weekly_hours_start ? parseFloat(form.weekly_hours_start) : null,
       days_per_week: form.days_per_week ? parseInt(form.days_per_week) : null,
       fitness_goal: form.fitness_goal,
+      riding_strength: form.riding_strength,
     })
     setSaving(false)
     setSaved(true)
@@ -126,6 +135,18 @@ function SettingsSection({ user, onUpdateProfile, onUpdateFTP }) {
           ))}
         </div>
       </div>
+      <div className="field">
+        <label>Rider type</label>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {RIDER_TYPES.map(o => (
+            <button key={o.v} onClick={() => set('riding_strength', o.v)}
+              className={`btn btn-sm ${form.riding_strength === o.v ? 'btn-primary' : ''}`}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <div className="hint">Shapes your quality mix — sprinters get VO₂ touches, climbers &amp; TTers more threshold.</div>
+      </div>
       <button className="btn btn-primary" onClick={save} disabled={saving} style={{ marginTop: 6 }}>
         {saving ? 'Saving…' : saved ? 'Saved ✓' : 'Save settings'}
       </button>
@@ -161,7 +182,7 @@ function ConnectionsSection({ strava, zwift }) {
               {strava.account.last_synced_at && ` Last synced ${new Date(strava.account.last_synced_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}.`}
             </div>
             <button className="btn btn-sm" onClick={strava.onSync} disabled={strava.syncing}>
-              <i className="ti ti-refresh" aria-hidden="true" /> {strava.syncing ? 'Syncing…' : 'Sync rides'}
+              <i className="ti ti-refresh" aria-hidden="true" /> {strava.syncing ? 'Syncing…' : 'Sync workouts'}
             </button>
             {strava.syncMsg && <div style={{ ...muted, marginTop: 6 }}>{strava.syncMsg}</div>}
           </>

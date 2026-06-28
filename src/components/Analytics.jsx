@@ -208,7 +208,7 @@ function TrainingLoadCard({ plan, sessionState, activities, user, planStart }) {
       <p style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 8, lineHeight: 1.5 }}>
         {fromRides
           ? 'From your synced rides (power or HR based), estimated from planned zones on days without a ride.'
-          : 'Estimated from planned zones + your RPE — sync rides for power-based accuracy.'}
+          : 'Estimated from planned zones + your RPE — sync workouts for power-based accuracy.'}
       </p>
     </div>
   )

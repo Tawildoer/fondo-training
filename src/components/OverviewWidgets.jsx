@@ -92,7 +92,7 @@ export function ConsistencyHeatmap({ series = [] }) {
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h2>Consistency</h2>
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-          Your training history fills in here as you complete sessions and sync rides.
+          Your training history fills in here as you complete sessions and sync workouts.
         </p>
       </div>
     )
@@ -163,10 +163,10 @@ export function RecentRides({ activities = [], ftp, maxHr, thresholdPaceRun, css
 
   return (
     <div className="card wgt-2">
-      <h2>Recent rides</h2>
+      <h2>Recent activity</h2>
       {rides.length === 0 ? (
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)', lineHeight: 1.6 }}>
-          Connect Strava (Menu → Connections) and your latest rides show up here.
+          Connect Strava (Menu → Connections) and your latest workouts show up here.
         </p>
       ) : (
         <div>
@@ -182,7 +182,7 @@ export function RecentRides({ activities = [], ftp, maxHr, thresholdPaceRun, css
                   <i className={`ti ${SPORTS[aSport]?.icon || 'ti-bike'}`} style={{ fontSize: 17 }} aria-hidden="true" />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name || 'Ride'}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.name || 'Workout'}</div>
                   <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
                     {d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })} · {fmtDur(a.moving_time_s)}{km ? ` · ${km} km` : ''}
                   </div>
