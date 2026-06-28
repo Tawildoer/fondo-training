@@ -8,24 +8,28 @@ import { SPORTS } from '../lib/sports'
 
 const LENGTHS = ['S', 'M', 'L']
 
-// Normalize a saved day map to the {length,type} shape (older weeks stored
-// raw minutes per day).
+// Normalize a saved day map to the {length} shape (older weeks stored raw
+// minutes, or a {length,type} pair — intensity is now automatic, so type is
+// dropped).
 function normalizeDays(days = {}) {
   const out = {}
   Object.entries(days).forEach(([day, v]) => {
-    if (v && typeof v === 'object') out[day] = { length: v.length || 'M', type: v.type || 'easy' }
-    else if (typeof v === 'number' && v > 0) out[day] = { length: v <= 50 ? 'S' : v <= 110 ? 'M' : 'L', type: 'easy' }
+    if (v && typeof v === 'object') out[day] = { length: v.length || 'M' }
+    else if (typeof v === 'number' && v > 0) out[day] = { length: v <= 50 ? 'S' : v <= 110 ? 'M' : 'L' }
   })
   return out
 }
 
-const FOCUS_OPTIONS = [
-  { v: 'none', label: 'Balanced' },
-  { v: 'endurance', label: 'Endurance' },
-  { v: 'threshold', label: 'Threshold' },
-  { v: 'climbing', label: 'Climbing' },
-  { v: 'recovery', label: 'Recovery week' },
-]
+// Per-day intensity preview labels (the read-only badge that replaced the
+// manual easy/hard toggle).
+const ZONE_INTENSITY = { z1: 'Recovery', z2: 'Endurance', z3: 'Sweet-spot', z4: 'Threshold', z5: 'VO₂', strength: 'Strength', rest: 'Rest' }
+const intensityLabel = session => {
+  if (!session) return ''
+  if (session.sport === 'brick') return 'Brick'
+  if (session.sport === 'multi') return '2 sessions'
+  if (session.name === 'Long ride' || session.name === 'Long run') return 'Long ride'
+  return ZONE_INTENSITY[session.zone] || ''
+}
 
 function mondayOfWeek(planStart, weekNum) {
   const d = new Date(planStart)
@@ -49,63 +53,28 @@ function fmtTime(v) {
 
 const ZONE_LABEL = { z1: 'Recovery', z2: 'Endurance', z3: 'Sweet spot', z4: 'Threshold', z5: 'VO₂', strength: 'Strength', rest: 'Rest' }
 
-// How many quality (hard) days a week should carry, by event proximity / goal.
-function recommendedHardDays(weeksToEvent, goal, weeksSinceEvent) {
-  if (weeksSinceEvent === 1) return 0  // post-race recovery
-  if (weeksSinceEvent === 2) return 1  // gentle rebuild
-  if (weeksToEvent != null) {
-    if (weeksToEvent <= 2) return 1   // taper: keep a little sharpness
-    if (weeksToEvent <= 8) return 3   // peak build
-    return 2                          // base build
-  }
-  return goal === 'build' ? 2 : 1
-}
-
-// Make sure a week carries at least `minHard` quality days, promoting easy
-// (non-long-ride) days as needed. Keeps the longest easy day as the long ride.
-function ensureHardDays(inputs, minHard) {
-  const days = { ...inputs.days }
-  const onDays = DAY_NAMES.filter(d => days[d])
-  const hardCount = onDays.filter(d => days[d].type === 'hard').length
-  if (hardCount >= minHard) return inputs
-  const longEasy = onDays
-    .filter(d => days[d].type === 'easy')
-    .sort((a, b) => TIER_MIN[days[b].length] - TIER_MIN[days[a].length])[0]
-  let need = minHard - hardCount
-  for (const d of onDays) {
-    if (need <= 0) break
-    if (days[d].type === 'easy' && d !== longEasy) { days[d] = { ...days[d], type: 'hard' }; need-- }
-  }
-  return { ...inputs, days }
-}
-
 // Sensible starting point so most weeks are one tap: reuse the last planned
-// week's pattern (new {length,type} shape), otherwise a light template — then
-// ensure it has the event/goal-appropriate amount of intensity.
-function defaultInputs(plannedWeeks, user, minHard = 2) {
+// week's day pattern, otherwise a light template. Intensity is automatic, so
+// days only carry a length now.
+function defaultInputs(plannedWeeks, user) {
   const latest = [...(plannedWeeks || [])].sort((a, b) => a.week_num - b.week_num).pop()
   const latestDays = latest?.inputs?.days
   const isNewShape = latestDays && Object.values(latestDays).some(v => v && typeof v === 'object')
-  let base
   if (isNewShape) {
-    base = {
-      days: { ...latestDays },
+    return {
+      days: normalizeDays(latestDays),
       goal: latest.inputs.goal || user.fitness_goal || 'build',
-      focus: latest.inputs.focus || 'none',
+      focus: 'none',
       strength: latest.inputs.strength || 0, // carry the rider's strength choice
       freshness: 3, busy: false, // momentary signals reset each week
     }
-  } else {
-    // Template: a long easy weekend ride + quality midweek days.
-    const order = ['Sat', 'Tue', 'Thu', 'Sun', 'Wed', 'Mon', 'Fri']
-    const n = Math.max(3, Math.min(7, user.days_per_week || 4))
-    const days = {}
-    order.slice(0, n).forEach(d => {
-      days[d] = d === 'Sat' ? { length: 'L', type: 'easy' } : { length: 'M', type: 'easy' }
-    })
-    base = { days, goal: user.fitness_goal || 'build', focus: 'none', strength: 0, freshness: 3, busy: false }
   }
-  return ensureHardDays(base, minHard)
+  // Template: a long weekend ride + a few midweek days.
+  const order = ['Sat', 'Tue', 'Thu', 'Sun', 'Wed', 'Mon', 'Fri']
+  const n = Math.max(3, Math.min(7, user.days_per_week || 4))
+  const days = {}
+  order.slice(0, n).forEach(d => { days[d] = { length: d === 'Sat' ? 'L' : 'M' } })
+  return { days, goal: user.fitness_goal || 'build', focus: 'none', strength: 0, freshness: 3, busy: false }
 }
 
 export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, sessionState = {}, events = [], loadCtx, onSave, onDelete, onGenerated }) {
@@ -129,19 +98,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
     return set
   }, [weekStart, activeWeekNum, sessionState])
 
-  const [inputs, setInputs] = useState(() => {
-    const off = [0, 6].includes(new Date().getDay()) ? 1 : 0
-    const ws = mondayOfWeek(planStart, weekNum + off)
-    const ev0 = nextEvent(events, ws)
-    const wte = ev0?._date
-      ? Math.max(0, Math.round((mondayOf(ev0._date) - ws) / (7 * 86400000)))
-      : null
-    const pe0 = prevEvent(events, ws)
-    const wse = pe0?._date
-      ? Math.max(0, Math.round((ws - mondayOf(pe0._date)) / (7 * 86400000)))
-      : null
-    return defaultInputs(plannedWeeks, user, recommendedHardDays(wte, user.fitness_goal, wse))
-  })
+  const [inputs, setInputs] = useState(() => defaultInputs(plannedWeeks, user))
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
@@ -166,7 +123,9 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
     weeksToEvent,
     weeksSinceEvent,
     weekNum: activeWeekNum,
-  }), [loadCtx, weeksToEvent, weeksSinceEvent, activeWeekNum, user.weekly_hours_start, user.days_per_week])
+    eventType: ev?.event_type || null,        // drives the auto intensity mix
+    riderType: user.riding_strength || 'all_rounder',
+  }), [loadCtx, weeksToEvent, weeksSinceEvent, activeWeekNum, user.weekly_hours_start, user.days_per_week, ev, user.riding_strength])
 
   // Load carried over from a bailed session the previous week that couldn't be
   // recouped within that week — this week absorbs it so misses don't vanish.
@@ -190,13 +149,18 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   const sportByDay = useMemo(() => sportsForWeek(inputs, suggestion, weights), [inputs, suggestion, weights])
   const multiSport = useMemo(() => Object.values(sportByDay).some(s => s !== 'bike'), [sportByDay])
 
+  // Live preview of the auto-assigned intensity per day (the same draft Generate
+  // commits), so the badges show exactly what each day will be before you save.
+  const preview = useMemo(() => draftWeek(suggestion, inputs, user.ftp, weights), [suggestion, inputs, user.ftp, weights])
+  const previewByDay = useMemo(() => Object.fromEntries(preview.map(s => [s.day, s])), [preview])
+
   const weekLabel = weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
   function toggleDay(day) {
     setInputs(prev => {
       const days = { ...prev.days }
       if (days[day]) delete days[day]
-      else days[day] = { length: day === 'Sat' || day === 'Sun' ? 'L' : 'M', type: 'easy' }
+      else days[day] = { length: day === 'Sat' || day === 'Sun' ? 'L' : 'M' }
       return { ...prev, days }
     })
   }
@@ -291,6 +255,14 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                   </span>
                 </div>
                 <div style={{ fontSize: 12, opacity: 0.9, marginTop: 3, lineHeight: 1.4 }}>{suggestion.note}</div>
+                {suggestion.quality && (
+                  <div style={{ fontSize: 11, fontWeight: 600, marginTop: 5, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <i className="ti ti-bolt" style={{ color: 'var(--color-electric)' }} aria-hidden="true" />
+                    {suggestion.quality.count === 0
+                      ? 'All endurance this week'
+                      : `${suggestion.quality.count} quality day${suggestion.quality.count > 1 ? 's' : ''} · ${suggestion.quality.zones.map(z => ZONE_INTENSITY[z]).join(' + ')}`}
+                  </div>
+                )}
                 {carryIn > 0 && (
                   <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-electric)', marginTop: 4 }}>
                     +{carryIn} TSS carried over from last week's missed session.
@@ -305,7 +277,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
             </div>
 
             <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: lockedIdx.size ? 10 : 16 }}>
-              Tap the days you can ride, then set how long and whether it's an easy or hard day.
+              Tap the days you can ride and set how long. The intensity mix — endurance vs threshold/VO₂ — is chosen automatically from your event, rider type and fatigue.
             </p>
             {lockedIdx.size > 0 && (
               <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -357,8 +329,6 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                       <>
                         <MiniSeg value={d.length} onChange={v => setDayField(day, 'length', v)}
                           options={LENGTHS.map(l => ({ v: l, label: TIER_LABEL[l] }))} />
-                        <MiniSeg value={d.type} onChange={v => setDayField(day, 'type', v)}
-                          options={[{ v: 'easy', label: 'Easy' }, { v: 'hard', label: 'Hard' }]} />
                         {multiSport && sportByDay[day] && (
                           <span title="Auto-assigned by event proximity" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--color-accent-text)' }}>
                             {(Array.isArray(sportByDay[day]) ? sportByDay[day] : [sportByDay[day]]).map((sp, si) => (
@@ -367,6 +337,14 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                                 <i className={`ti ${SPORTS[sp]?.icon || ''}`} aria-hidden="true" /> {SPORTS[sp]?.label}
                               </span>
                             ))}
+                          </span>
+                        )}
+                        {/* Auto-assigned intensity (replaces the easy/hard toggle) */}
+                        {previewByDay[day] && intensityLabel(previewByDay[day]) && (
+                          <span className={previewByDay[day].zone && previewByDay[day].zone !== 'rest' ? `sess-${previewByDay[day].zone}` : ''}
+                            title="Chosen automatically from your event, rider type and fatigue"
+                            style={{ fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 20, letterSpacing: '0.02em' }}>
+                            {intensityLabel(previewByDay[day])}
                           </span>
                         )}
                         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--color-text-faint)' }}>{fmtTime(TIER_MIN[d.length])}</span>
@@ -424,17 +402,10 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                   <div className="hint">1 = wrecked · 5 = flying</div>
                 </div>
 
-                <div className="field">
-                  <label>Focus</label>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    {FOCUS_OPTIONS.map(o => (
-                      <button key={o.v} onClick={() => setInputs(p => ({ ...p, focus: o.v }))}
-                        className={`btn btn-sm ${inputs.focus === o.v ? 'btn-primary' : ''}`}>
-                        {o.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 10 }}>
+                  <input type="checkbox" checked={inputs.focus === 'recovery'} onChange={e => setInputs(p => ({ ...p, focus: e.target.checked ? 'recovery' : 'none' }))} style={{ width: 16, height: 16, accentColor: 'var(--color-accent)' }} />
+                  Recovery week — keep everything easy
+                </label>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
                   <input type="checkbox" checked={inputs.busy} onChange={e => setInputs(p => ({ ...p, busy: e.target.checked }))} style={{ width: 16, height: 16, accentColor: 'var(--color-accent)' }} />

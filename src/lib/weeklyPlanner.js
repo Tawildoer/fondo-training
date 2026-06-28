@@ -85,7 +85,7 @@ const TSS_PER_HOUR = 52 // endurance-weighted blended week
 
 export function computeWeekTarget(inputs, ctx = {}) {
   const { goal = 'build', freshness = 3, focus = 'none', busy = false } = inputs || {}
-  const { currentTsb = null, recentWeeklyTss = 0, weeklyHoursStart = 0, daysPerWeek = 5, weeksToEvent = null, weeksSinceEvent = null, weekNum = 1 } = ctx
+  const { currentTsb = null, recentWeeklyTss = 0, weeklyHoursStart = 0, daysPerWeek = 5, weeksToEvent = null, weeksSinceEvent = null, weekNum = 1, eventType = null, riderType = 'all_rounder' } = ctx
 
   // Where you start and a sustainable ceiling (classic ~1.8× start, capped by
   // how many days you ride). Pure sports-science heuristics on your profile.
@@ -144,14 +144,80 @@ export function computeWeekTarget(inputs, ctx = {}) {
   targetHours = clamp(targetHours, startHours * (isRecovery ? 0.4 : 0.5), maxHours * 1.05)
   targetHours = Math.round(targetHours * 2) / 2
 
+  // Auto intensity: how many quality days and which zones, from event + rider
+  // type + phase + fatigue. Replaces the old manual easy/hard choice.
+  const quality = planQuality({
+    eventType, riderType, goal, weeksToEvent, weeksSinceEvent,
+    currentTsb, busy, isRecovery, availDays: countAvailable(inputs),
+  })
+
   return {
     targetHours,
     targetTss: Math.round(targetHours * TSS_PER_HOUR),
     isRecovery,
     phase,
-    hardDays: isRecovery ? 0 : hardDaysFor(focus, weeksToEvent, inputs),
+    quality,
+    hardDays: quality.count, // kept for any legacy reader
     note: buildNote({ phase, goal, weeksToEvent, weeksSinceEvent, isRecovery, busy, deeplyFatigued }),
   }
+}
+
+// ── Auto intensity engine ────────────────────────────────────
+// Decides the week's quality (above-endurance) work — how many days and which
+// zones — so the rider never has to guess. Driven by event type + proximity
+// (phase), rider type, goal and fatigue. Returns { count, zones } where zones is
+// hardest-first (e.g. ['z5','z4']).
+
+// Race-specific zone menus, most specific first. z3 sweet-spot, z4 threshold,
+// z5 VO₂/anaerobic.
+const EVENT_ZONES = {
+  criterium:  ['z5', 'z4', 'z3'],
+  road_race:  ['z4', 'z5', 'z3'],
+  time_trial: ['z4', 'z3', 'z4'],
+  gran_fondo: ['z3', 'z4', 'z3'],
+  sportive:   ['z3', 'z3', 'z4'],
+  other:      ['z4', 'z3', 'z3'],
+}
+const RIDER_BIAS = { sprinter: 'z5', climber: 'z4', time_trialist: 'z4', all_rounder: null }
+const ZONE_HARDNESS = ['z5', 'z4', 'z3', 'z2', 'z1'] // hardest → easiest
+
+function qualityZones(count, eventType, riderType, isBase) {
+  if (count <= 0) return []
+  let menu = (EVENT_ZONES[eventType] || EVENT_ZONES.other).slice()
+  // Base/off-season favours sustainable sweet-spot over VO₂ — except sprinters,
+  // whose top end needs touching year-round.
+  if (isBase && riderType !== 'sprinter') menu = menu.map(z => (z === 'z5' ? 'z3' : z))
+  const zones = []
+  for (let i = 0; i < count; i++) zones.push(menu[i % menu.length])
+  // Guarantee one slot of the rider's signature zone.
+  const bias = RIDER_BIAS[riderType]
+  if (bias && !zones.includes(bias)) zones[zones.length - 1] = bias
+  return zones.sort((a, b) => ZONE_HARDNESS.indexOf(a) - ZONE_HARDNESS.indexOf(b))
+}
+
+export function planQuality(ctx = {}) {
+  const { eventType = null, riderType = 'all_rounder', goal = 'build', weeksToEvent = null,
+          weeksSinceEvent = null, currentTsb = null, busy = false, isRecovery = false, availDays = 4 } = ctx
+  if (isRecovery) return { count: 0, zones: [] }
+
+  // 1. Base count by phase.
+  let count
+  if (weeksSinceEvent === 1) count = 0                                   // post-race
+  else if (weeksSinceEvent === 2) count = 1                              // rebuild
+  else if (weeksToEvent != null && weeksToEvent <= 2) count = 1          // taper, stay sharp
+  else if (weeksToEvent != null && weeksToEvent <= 8) count = 3          // peak build
+  else if (weeksToEvent != null) count = 2                              // base build toward event
+  else count = goal === 'build' ? 2 : 1                                  // no event
+
+  // 2. Fatigue / busyness pull it back.
+  if (currentTsb != null && currentTsb <= -25) count -= 1
+  if (busy) count -= 1
+
+  // 3. Always leave at least one endurance day; cap at 3 quality days.
+  count = clamp(count, 0, Math.min(3, Math.max(0, availDays - 1)))
+
+  const isBase = weeksToEvent == null || weeksToEvent > 8
+  return { count, zones: qualityZones(count, eventType, riderType, isBase) }
 }
 
 // Rough projection of where this week's load leaves your fitness (CTL), so the
@@ -161,15 +227,6 @@ export function projectCtl(currentCtl, weeklyTss) {
   let ctl = currentCtl || 0
   for (let i = 0; i < 7; i++) ctl += (daily - ctl) / 42
   return Math.round(ctl)
-}
-
-function hardDaysFor(focus, weeksToEvent, inputs) {
-  const avail = countAvailable(inputs)
-  let n = 2
-  if (focus === 'endurance') n = 1
-  if (focus === 'threshold' || focus === 'climbing') n = 2
-  if (weeksToEvent != null && weeksToEvent >= 3 && weeksToEvent <= 8) n = 3 // peak
-  return clamp(n, 0, Math.max(0, avail - 1))
 }
 
 function countAvailable(inputs) {
@@ -477,12 +534,26 @@ export function buildSwimSets(zone, totalMin) {
 export const TIER_MIN = { S: 45, M: 90, L: 150 }
 export const TIER_LABEL = { S: 'Short', M: 'Med', L: 'Long' }
 
-// Quality-day zone: a long quality day is tempo/sweet-spot (z3); shorter
-// quality days are threshold (z4), with sweet-spot variety when several stack.
-function hardZone(i, focus, length) {
-  if (length === 'L') return 'z3'
-  if (focus === 'climbing' || focus === 'threshold') return 'z4'
-  return i % 2 === 0 ? 'z4' : 'z3'
+// Choose which days carry the week's quality work, spread away from the long
+// ride and each other so hard efforts never stack back-to-back. Greedy: each
+// pick maximises the minimum distance to the long day + already-picked days.
+function pickQualityDays(candidates, longDay, count) {
+  const idx = d => DAY_NAMES.indexOf(d)
+  const picked = []
+  while (picked.length < count && picked.length < candidates.length) {
+    let best = null, bestMin = -1, bestSum = -1
+    for (const d of candidates) {
+      if (picked.includes(d)) continue
+      const refs = [longDay, ...picked].filter(Boolean).map(idx)
+      const dists = refs.map(r => Math.abs(r - idx(d)))
+      const min = refs.length ? Math.min(...dists) : 99
+      const sum = dists.reduce((a, b) => a + b, 0)
+      // Maximise the closest gap first; break ties by overall spread.
+      if (min > bestMin || (min === bestMin && sum > bestSum)) { bestMin = min; bestSum = sum; best = d }
+    }
+    picked.push(best)
+  }
+  return picked
 }
 
 // ── Discipline blend from event proximity ────────────────────
@@ -550,11 +621,11 @@ function assignSportsByWeight(onDays, weights, target, days = {}) {
     if (weekendBike) out[weekendBike] = 'brick'
 
     // Triathlon two-a-days: if single-sport days didn't give us enough swims,
-    // pair a swim onto the shortest easy ride/run days (leaving the long day
-    // alone) as a second session — out[day] becomes ['swim', baseSport].
+    // pair a swim onto the shortest ride/run days (the long day sorts last and
+    // is left alone) as a second session — out[day] becomes ['swim', baseSport].
     let swims = onDays.filter(d => out[d] === 'swim').length
     const candidates = onDays
-      .filter(d => (out[d] === 'bike' || out[d] === 'run') && (days[d]?.type || 'easy') === 'easy')
+      .filter(d => out[d] === 'bike' || out[d] === 'run')
       .sort((a, b) => (TIER_MIN[days[a]?.length] || 90) - (TIER_MIN[days[b]?.length] || 90))
     for (const d of candidates) {
       if (swims >= SWIM_GOAL) break
@@ -580,24 +651,33 @@ export function sportsForWeek(inputs, target, weights) {
 // (see disciplineWeights); a week mixes sports whenever events overlap.
 export function draftWeek(target, inputs, ftp, weights) {
   const days = inputs?.days || {}
-  const focus = inputs?.focus || 'none'
   const onDays = DAY_NAMES.filter(d => days[d])
   if (!onDays.length) return DAY_NAMES.map(restDay)
 
   // Per-day discipline from the proximity blend.
   const sportByDay = sportsForWeek(inputs, target, weights)
 
-  // Long session = the longest easy day, but never a swim, brick or two-a-day.
-  const isSingle = d => typeof sportByDay[d] === 'string'
-  const longEasy = onDays
-    .filter(d => (days[d].type || 'easy') === 'easy' && isSingle(d) && sportByDay[d] !== 'swim' && sportByDay[d] !== 'brick')
+  // Single ride/run days are where endurance + quality live (swim/brick/two-a-
+  // day are handled on their own). The long ride = the longest of those.
+  const isSingleRide = d => typeof sportByDay[d] === 'string' && sportByDay[d] !== 'swim' && sportByDay[d] !== 'brick'
+  const longDay = onDays
+    .filter(isSingleRide)
     .sort((a, b) => TIER_MIN[days[b].length] - TIER_MIN[days[a].length])[0]
 
-  let hardSeen = 0
+  // Auto intensity: pick which days carry quality work and which zone each gets,
+  // spaced away from the long ride and each other. Zones are hardest-first; we
+  // lay them out in calendar order so the hardest lands earliest in the week.
+  const quality = target.quality || { count: 0, zones: [] }
+  const qCandidates = onDays.filter(d => isSingleRide(d) && d !== longDay)
+  const qDays = target.isRecovery ? [] : pickQualityDays(qCandidates, longDay, quality.count)
+  const qZoneByDay = {}
+  qDays.slice().sort((a, b) => DAY_NAMES.indexOf(a) - DAY_NAMES.indexOf(b))
+    .forEach((d, i) => { qZoneByDay[d] = quality.zones[i] || 'z4' })
+
   const byDay = {}
   onDays.forEach(day => {
     const sport = sportByDay[day]
-    const { length = 'M', type = 'easy' } = days[day]
+    const { length = 'M' } = days[day]
     let minutes = TIER_MIN[length] || 90
     if (sport === 'brick') { // split the day ~70% bike / 30% run
       byDay[day] = buildBrick(day, Math.round(minutes * 0.7), Math.round(minutes * 0.3), ftp)
@@ -615,10 +695,10 @@ export function draftWeek(target, inputs, ftp, weights) {
     }
     if (sport === 'swim') minutes = Math.min(minutes, 75) // swims don't run long
     let zone
-    if (target.isRecovery) zone = minutes <= 45 ? 'z1' : 'z2'
-    else if (type === 'hard') zone = hardZone(hardSeen++, focus, length)
-    else zone = minutes <= 45 ? 'z1' : 'z2'
-    byDay[day] = buildSession(day, zone, minutes, ftp, day === longEasy && zone === 'z2', sport)
+    if (target.isRecovery || sport === 'swim') zone = minutes <= 45 ? 'z1' : 'z2'
+    else if (qZoneByDay[day]) zone = qZoneByDay[day] // auto-assigned quality day
+    else zone = minutes <= 45 ? 'z1' : 'z2'         // endurance
+    byDay[day] = buildSession(day, zone, minutes, ftp, day === longDay && zone === 'z2', sport)
   })
 
   // Optional strength: drop 1–2 sessions onto otherwise-rest days, preferring
@@ -628,7 +708,7 @@ export function draftWeek(target, inputs, ftp, weights) {
   if (wantStrength > 0) {
     const idxOf = d => DAY_NAMES.indexOf(d)
     const demanding = onDays
-      .filter(d => ['z4', 'z5'].includes(byDay[d]?.zone) || d === longEasy)
+      .filter(d => ['z4', 'z5'].includes(byDay[d]?.zone) || d === longDay)
       .map(idxOf)
     const distToDemand = i => demanding.length ? Math.min(...demanding.map(d => Math.abs(d - i))) : 99
     const restIdx = DAY_NAMES.map((_, i) => i).filter(i => !byDay[DAY_NAMES[i]])
