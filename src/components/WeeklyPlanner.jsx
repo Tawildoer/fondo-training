@@ -246,32 +246,21 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                 <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', opacity: 0.8 }}>
                   Suggested this week · {suggestion.phase}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
-                    ~{suggestion.targetHours} h
-                  </span>
-                  <span style={{ fontSize: 12, opacity: 0.85 }}>
-                    ≈ {suggestion.targetTss} TSS · you've set {totalHours} h
-                    {inputs.strength > 0 && ` · +${inputs.strength} strength`}
-                  </span>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                  ~{suggestion.targetHours} h
                 </div>
-                <div style={{ fontSize: 12, opacity: 0.9, marginTop: 3, lineHeight: 1.4 }}>{suggestion.note}</div>
-                {suggestion.quality?.reason && (
-                  <div title="Why this week looks the way it does" style={{ fontSize: 11, fontWeight: 600, marginTop: 5, display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.4 }}>
-                    <i className="ti ti-bolt" style={{ color: 'var(--color-electric)', flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
-                    <span>{suggestion.quality.reason}</span>
-                  </div>
-                )}
-                {carryIn > 0 && (
-                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-electric)', marginTop: 4 }}>
-                    +{carryIn} TSS carried over from last week's missed session.
-                  </div>
-                )}
-                {loadCtx?.currentCtl > 0 && (
-                  <div style={{ fontSize: 11, opacity: 0.85, marginTop: 4 }}>
-                    Fitness {loadCtx.currentCtl} → ~{projectCtl(loadCtx.currentCtl, suggestion.targetTss)} CTL if you hit it
-                  </div>
-                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 5 }}>
+                  <div style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.4 }}>{suggestion.note}</div>
+                  {suggestion.quality?.reason && (
+                    <div style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.4 }}>{suggestion.quality.reason}</div>
+                  )}
+                  {carryIn > 0 && (
+                    <div style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.4 }}>+{carryIn} TSS carried over from last week's missed session.</div>
+                  )}
+                  {loadCtx?.currentCtl > 0 && (
+                    <div style={{ fontSize: 12, opacity: 0.9, lineHeight: 1.4 }}>Fitness {loadCtx.currentCtl} → ~{projectCtl(loadCtx.currentCtl, suggestion.targetTss)} CTL if you hit it</div>
+                  )}
+                </div>
               </div>
             </div>
 
