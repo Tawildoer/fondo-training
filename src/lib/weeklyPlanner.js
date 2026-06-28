@@ -85,7 +85,7 @@ const TSS_PER_HOUR = 52 // endurance-weighted blended week
 
 export function computeWeekTarget(inputs, ctx = {}) {
   const { goal = 'build', freshness = 3, focus = 'none', busy = false } = inputs || {}
-  const { currentTsb = null, currentCtl = null, recentWeeklyTss = 0, weeklyHoursStart = 0, daysPerWeek = 5, weeksToEvent = null, weeksSinceEvent = null, weekNum = 1, eventType = null, riderType = 'all_rounder' } = ctx
+  const { currentTsb = null, currentCtl = null, recentWeeklyTss = 0, weeklyHoursStart = 0, daysPerWeek = 5, weeksToEvent = null, weeksSinceEvent = null, weekNum = 1, eventType = null, riderType = 'all_rounder', ftp = null } = ctx
 
   // Where you start and a sustainable ceiling (classic ~1.8× start, capped by
   // how many days you ride). Pure sports-science heuristics on your profile.
@@ -162,6 +162,13 @@ export function computeWeekTarget(inputs, ctx = {}) {
   if (!isRecovery && deeplyFatigued && quality.count > 0) {
     applyReadinessGate(quality, { inputs, currentCtl, currentTsb })
   }
+
+  // FTP test: every ~4 weeks, in the fresh week right after a recovery week, when
+  // you have power and aren't tapering. The test replaces a quality day; the ride
+  // estimator then auto-applies the new FTP.
+  const taper = weeksToEvent != null && weeksToEvent <= 2
+  quality.test = !!ftp && weekNum % 4 === 1 && !isRecovery && !deeplyFatigued && !taper && quality.count > 0
+
   quality.reason = buildIntensityReason({
     isRecovery, postEventRecovery, weekNum, deeplyFatigued, currentTsb, quality, weeksToEvent,
   })
@@ -218,6 +225,7 @@ function buildIntensityReason({ isRecovery, postEventRecovery, weekNum, deeplyFa
     if (quality.count === 0) return `Form is deep in the red (TSB ${Math.round(currentTsb)}) — endurance only this week while you recover.`
     return `Form is deep in the red (TSB ${Math.round(currentTsb)}) — easy early week, then a ${mix} day later on once your form's back out of the red (≈ ${quality.earliestDay}).`
   }
+  if (quality.test) return 'FTP test week — a 20-min test on a fresh day re-checks your FTP, then easier quality.'
   if (quality.count === 0) return 'All endurance this week — building aerobic base.'
   const taper = weeksToEvent != null && weeksToEvent <= 2
   return `${quality.count} quality day${quality.count > 1 ? 's' : ''} · ${mix}${taper ? ' — sharpening for your event' : ''}.`
@@ -377,6 +385,26 @@ export function buildMulti(day, parts, ftp) {
     durationMin: built.reduce((s, b) => s + b.durationMin, 0),
     parts: built,
   }
+}
+
+// A 20-minute FTP test: 15-min build → 20-min all-out → 10-min easy. If the
+// day's slot is longer than the test, an abridged Z2 endurance block is added
+// after so the day still carries its planned load. 95% of the 20-min average
+// becomes the new FTP (picked up automatically by the ride estimator).
+const FTP_TEST_CORE = 45 // 15 build + 20 effort + 10 easy
+export function buildFtpTest(day, ftp, dayMinutes = FTP_TEST_CORE) {
+  const topUpMin = dayMinutes > FTP_TEST_CORE + 10 ? clamp(Math.round(dayMinutes - FTP_TEST_CORE), 0, 60) : 0
+  const total = FTP_TEST_CORE + topUpMin
+  const desc = `15 min build → 20 min all-out → 10 min easy${topUpMin ? ` → ${topUpMin} min Z2 endurance` : ''}. ` +
+    `Hold the highest even power you can for the 20 min — 95% of that average becomes your new FTP (auto-applied once you sync).`
+  return { day, zone: 'z4', test: true, name: 'FTP test', desc, durationMin: total, topUpMin }
+}
+
+// Load of an FTP test: the 20-min near-FTP effort plus easy warm-up/cool-down/
+// top-up at endurance.
+export function testLoad(session) {
+  const total = session?.durationMin || FTP_TEST_CORE
+  return tssFor('z4', 22) + tssFor('z2', Math.max(0, total - 25))
 }
 
 export const ZONE_OPTIONS = [
@@ -736,9 +764,20 @@ export function draftWeek(target, inputs, ftp, weights) {
     const minIdx = DAY_NAMES.indexOf(quality.earliestDay)
     qCandidates = qCandidates.filter(d => DAY_NAMES.indexOf(d) >= minIdx)
   }
-  const qDays = target.isRecovery ? [] : pickQualityDays(qCandidates, longDay, quality.count)
+  let qDays = target.isRecovery ? [] : pickQualityDays(qCandidates, longDay, quality.count)
+
+  // FTP test week: the freshest quality bike day becomes the test, and we keep at
+  // most one other quality day so the test week isn't overloaded.
+  let testDay = null
+  if (quality.test && ftp && qDays.length) {
+    const cal = qDays.slice().sort((a, b) => DAY_NAMES.indexOf(a) - DAY_NAMES.indexOf(b))
+    testDay = cal.find(d => sportByDay[d] === 'bike') || null
+    if (testDay) qDays = [testDay, ...cal.filter(d => d !== testDay).slice(0, 1)]
+  }
+
+  // Zones for the normal (non-test) quality days, in calendar order.
   const qZoneByDay = {}
-  qDays.slice().sort((a, b) => DAY_NAMES.indexOf(a) - DAY_NAMES.indexOf(b))
+  qDays.filter(d => d !== testDay).sort((a, b) => DAY_NAMES.indexOf(a) - DAY_NAMES.indexOf(b))
     .forEach((d, i) => { qZoneByDay[d] = quality.zones[i] || 'z4' })
 
   const byDay = {}
@@ -746,6 +785,10 @@ export function draftWeek(target, inputs, ftp, weights) {
     const sport = sportByDay[day]
     const { length = 'M' } = days[day]
     let minutes = TIER_MIN[length] || 90
+    if (day === testDay) { // FTP test (with an abridged endurance top-up if the slot is long)
+      byDay[day] = buildFtpTest(day, ftp, minutes)
+      return
+    }
     if (sport === 'brick') { // split the day ~70% bike / 30% run
       byDay[day] = buildBrick(day, Math.round(minutes * 0.7), Math.round(minutes * 0.3), ftp)
       return
@@ -862,6 +905,7 @@ export function projectLoad({ currentCtl = 0, recentWeeklyTss = 0, planStart, cu
 export function weekTss(sessions) {
   return (sessions || []).reduce((s, x) => {
     if (!x || x.zone === 'rest' || x.zone === 'strength') return s
+    if (x.test) return s + testLoad(x)
     if (x.sport === 'brick') return s + brickTss(x)
     if (x.sport === 'multi') return s + multiTss(x)
     const minutes = x.durationMin != null ? x.durationMin

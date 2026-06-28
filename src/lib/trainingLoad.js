@@ -82,12 +82,15 @@ const partLoad = (zone, minutes) => { const IF = ZONE_IF[zone] || 0.65; return (
 // Sum of a compound session's sub-efforts (brick legs / two-a-day parts).
 const compoundLoad = session => (session.legs || session.parts || [])
   .reduce((s, p) => s + partLoad(p.zone, p.durationMin || 0), 0)
+// FTP test: the 20-min near-FTP effort + easy warm-up/cool-down/top-up.
+const ftpTestLoad = session => partLoad('z4', 22) + partLoad('z2', Math.max(0, (session.durationMin || 45) - 25))
 
 // The *prescribed* TSS for a session (zone + duration only) — independent of
 // completion/RPE. Used for planned-vs-actual comparisons.
 export function plannedLoad(session) {
   // Strength carries no power-based TSS — keep the PMC honest.
   if (!session || session.zone === 'rest' || session.zone === 'strength') return 0
+  if (session.test) return Math.round(ftpTestLoad(session))
   if (session.legs || session.parts) return Math.round(compoundLoad(session))
   const minutes = parseLeadingMinutes(session.desc) || 45
   return Math.round(partLoad(session.zone, minutes))
@@ -98,7 +101,9 @@ export function estSessionLoad(session, state) {
   if (!session || session.zone === 'rest' || session.zone === 'strength') return 0
   if (!state?.completed) return 0
   let tss
-  if (session.legs || session.parts) {
+  if (session.test) {
+    tss = ftpTestLoad(session)
+  } else if (session.legs || session.parts) {
     tss = compoundLoad(session)
   } else {
     const minutes = parseLeadingMinutes(session.desc) || 45

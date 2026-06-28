@@ -26,7 +26,7 @@ function sessionMinutes(s) {
 }
 
 function sessionTss(s) {
-  if (!s || s.zone === 'rest' || s.zone === 'strength') return 0
+  if (!s || s.zone === 'rest' || s.zone === 'strength' || s.test) return 0
   if (s.sport === 'brick') return brickTss(s)
   if (s.sport === 'multi') return multiTss(s)
   return tssFor(s.zone, sessionMinutes(s))
@@ -94,8 +94,8 @@ export function rebalanceForBail({ week, nextWeek, bailedIdx, planStart, ftp, to
   const sessions = (week?.sessions || []).map(s => ({ ...s }))
   const bailed = sessions[bailedIdx]
   // Strength carries no cycling load — bailing one needs no ride rebalance.
-  // Strength, brick and two-a-day sessions don't drive the cycling rebalance.
-  if (!bailed || bailed.zone === 'rest' || bailed.zone === 'strength' || bailed.sport === 'brick' || bailed.sport === 'multi') return null
+  // Strength, brick, two-a-day and FTP-test sessions don't drive the rebalance.
+  if (!bailed || bailed.zone === 'rest' || bailed.zone === 'strength' || bailed.test || bailed.sport === 'brick' || bailed.sport === 'multi') return null
   const deficit = sessionTss(bailed)
   if (deficit <= 0) return null
 

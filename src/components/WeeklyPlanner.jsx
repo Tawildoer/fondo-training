@@ -25,6 +25,7 @@ function normalizeDays(days = {}) {
 const ZONE_INTENSITY = { z1: 'Recovery', z2: 'Endurance', z3: 'Sweet-spot', z4: 'Threshold', z5: 'VO₂', strength: 'Strength', rest: 'Rest' }
 const intensityLabel = session => {
   if (!session) return ''
+  if (session.test) return 'FTP test'
   if (session.sport === 'brick') return 'Brick'
   if (session.sport === 'multi') return '2 sessions'
   if (session.name === 'Long ride' || session.name === 'Long run') return 'Long ride'
@@ -126,7 +127,8 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
     weekNum: activeWeekNum,
     eventType: ev?.event_type || null,        // drives the auto intensity mix
     riderType: user.riding_strength || 'all_rounder',
-  }), [loadCtx, weeksToEvent, weeksSinceEvent, activeWeekNum, user.weekly_hours_start, user.days_per_week, ev, user.riding_strength])
+    ftp: user.ftp || null,                    // gates the monthly FTP test
+  }), [loadCtx, weeksToEvent, weeksSinceEvent, activeWeekNum, user.weekly_hours_start, user.days_per_week, ev, user.riding_strength, user.ftp])
 
   // Load carried over from a bailed session the previous week that couldn't be
   // recouped within that week — this week absorbs it so misses don't vanish.

@@ -236,7 +236,7 @@ function TodayCard({ plan, sessionState, planStart, onToggle, onBail, onDownload
                       : <><i className="ti ti-circle-x" style={{ fontSize: 13 }} aria-hidden="true" /> Bail</>}
                   </button>
                 )}
-                {!isRest && sessionSport(session) === 'bike' && session.zone !== 'strength' && onDownloadZwo && (
+                {!isRest && sessionSport(session) === 'bike' && session.zone !== 'strength' && !session.test && onDownloadZwo && (
                   <button
                     onClick={() => onDownloadZwo(session, weekNum, idx)}
                     style={{

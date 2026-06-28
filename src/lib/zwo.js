@@ -33,9 +33,10 @@ export function zwoFilename(weekNum, idx) {
 
 // `dateLabel` is an optional short prefix for the in-Zwift name (e.g. "Fri 26 Jun").
 export function buildZwo(session, ftp, dateLabel = '') {
-  // Only bike workouts export to Zwift (rest, strength, run, swim, brick don't).
+  // Only structured bike workouts export to Zwift (rest, strength, run, swim,
+  // brick and the FTP test don't).
   const sport = session?.sport || 'bike'
-  if (!session || session.zone === 'rest' || session.zone === 'strength' || sport !== 'bike' || !ftp) return null
+  if (!session || session.zone === 'rest' || session.zone === 'strength' || session.test || sport !== 'bike' || !ftp) return null
   const wk = buildWorkout(session.zone, session.durationMin, ftp)
   const title = `${dateLabel ? dateLabel + ' · ' : ''}${session.name}${wk.summary ? ` (${wk.summary})` : ''}`
   const body = (wk.segments || []).map(segmentXml).join('\n')

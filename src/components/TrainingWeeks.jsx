@@ -321,7 +321,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                     const expandable = !isRest
                     // Interval profiles apply to bike & run quality sessions; swim,
                     // brick and strength render their own block prescriptions.
-                    const structured = expandable && (sport === 'bike' || sport === 'run') &&
+                    const structured = expandable && !session.test && (sport === 'bike' || sport === 'run') &&
                       ['z3', 'z4', 'z5'].includes(session.zone) && session.durationMin != null
                     const wk = structured
                       ? buildWorkout(session.zone, session.durationMin, user?.ftp,
@@ -432,6 +432,11 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                   ? <span style={{ textDecoration: 'line-through', opacity: 0.5 }}>{session.name}</span>
                                   : session.name}
                               </span>
+                              {session.test && (
+                                <span className="tag" style={{ background: 'var(--color-electric)', color: '#241f0e', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                  <i className="ti ti-gauge" style={{ fontSize: 12 }} aria-hidden="true" /> FTP TEST
+                                </span>
+                              )}
                               {state.completed && !isRest && (
                                 <i className="ti ti-circle-check" style={{ fontSize: 14, opacity: 0.7 }} aria-hidden="true" />
                               )}
@@ -451,7 +456,15 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
 
                             {detailOpen && (
                               <>
-                                {structured ? (
+                                {session.test ? (
+                                  <div style={{ marginTop: 10 }}>
+                                    <SteadyTargets zone="z4" sport="bike" ftp={user?.ftp} maxHr={user?.max_hr} />
+                                    <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.9, marginTop: 8 }}>
+                                      Warm up, then ride the 20 min as hard as you can hold evenly — pace it like a time trial.
+                                      95% of your 20-min average becomes your new FTP, applied automatically once you sync.
+                                    </div>
+                                  </div>
+                                ) : structured ? (
                                   <div style={{ marginTop: 10 }}>
                                     <IntervalProfile segments={wk.segments} />
                                     <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.9, marginTop: 8 }}>{wk.breakdown}</div>
@@ -498,7 +511,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                     {editKey === `${week.num}_${idx}` ? ' Done editing' : ' Edit session'}
                                   </button>
                                 )}
-                                {onDownloadZwo && user?.ftp && sport === 'bike' && (
+                                {onDownloadZwo && user?.ftp && sport === 'bike' && !session.test && (
                                   <button
                                     onClick={e => { stop(e); onDownloadZwo(session, week.num, idx) }}
                                     style={{
