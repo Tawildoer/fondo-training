@@ -14,6 +14,7 @@ import PlanGuide from './PlanGuide'
 import WeeklyPlanner from './WeeklyPlanner'
 import AccountMenu from './AccountMenu'
 import { buildSession } from '../lib/weeklyPlanner'
+import { estimateFtp } from '../lib/riderProfile'
 import { rebalanceForBail } from '../lib/rebalance'
 import { buildZwo } from '../lib/zwo'
 import { downloadZwo, supportsFolderSync, linkZwiftFolder, loadHandle, forgetHandle, permission as zwiftPermission, writeSessions } from '../lib/zwiftSync'
@@ -71,6 +72,9 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
 
   // Transient "we rebalanced your week" notice with an undo affordance.
   const [rebalanceToast, setRebalanceToast] = useState(null)
+  // Transient "FTP auto-updated from your rides" notice.
+  const [ftpToast, setFtpToast] = useState(null)
+  const lastAutoFtpRef = useRef(null)
 
   // Zwift folder sync: a granted directory handle (persisted in IndexedDB) plus
   // a small status line for the connect card.
@@ -386,6 +390,38 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
     )
   }, [loading, plan, activities, planStart, sessionState, user.id])
 
+  // Auto-FTP: estimate FTP from recent synced power and apply it when it drifts
+  // meaningfully from the saved value (rezones + logs to history). The estimate
+  // is the best effort across ~6 weeks, so it only rises on a genuine hard ride
+  // and only falls on real detraining; we cap the change per update and de-dupe
+  // with a ref so it can't flap.
+  useEffect(() => {
+    if (loading) return
+    const est = estimateFtp(activities)
+    if (!est) return
+    const cur = user.ftp || 0
+    if (!cur) { // no FTP yet → seed it
+      if (lastAutoFtpRef.current === est.ftp) return
+      lastAutoFtpRef.current = est.ftp
+      handleUpdateFTP(est.ftp)
+      setFtpToast({ from: null, to: est.ftp })
+      return
+    }
+    const drift = est.ftp - cur
+    // Raise readily on a strong effort; lower only on a clear, sustained drop so
+    // an easy base block doesn't nibble FTP down between tests.
+    const meaningful = drift > 0
+      ? (drift >= 5 && drift / cur >= 0.02)
+      : (-drift >= 10 && -drift / cur >= 0.05)
+    if (!meaningful) return
+    // Cap any single auto-change to ±12% so a freak number can't lurch zones.
+    const capped = Math.round(Math.max(cur * 0.88, Math.min(cur * 1.12, est.ftp)))
+    if (capped === cur || lastAutoFtpRef.current === capped) return
+    lastAutoFtpRef.current = capped
+    handleUpdateFTP(capped)
+    setFtpToast({ from: cur, to: capped })
+  }, [loading, activities, user.ftp])
+
   const streak = useMemo(
     () => computeStreak(plan, sessionState, planStart),
     [plan, sessionState, planStart]
@@ -546,6 +582,18 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
             <i className="ti ti-arrow-back-up" aria-hidden="true" /> Undo
           </button>
           <button onClick={() => setRebalanceToast(null)} aria-label="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex', padding: 4 }}>
+            <i className="ti ti-x" style={{ fontSize: 15 }} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      {ftpToast && (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', marginBottom: 12, borderLeft: '3px solid var(--color-electric)' }}>
+          <i className="ti ti-bolt" style={{ fontSize: 17, color: 'var(--color-electric)', flexShrink: 0 }} aria-hidden="true" />
+          <span style={{ flex: 1, fontSize: 13, lineHeight: 1.45 }}>
+            {ftpToast.from ? `FTP updated ${ftpToast.from} → ${ftpToast.to} W from your recent rides.` : `FTP set to ${ftpToast.to} W from your recent rides.`} Zones recalculated.
+          </span>
+          <button onClick={() => setFtpToast(null)} aria-label="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex', padding: 4 }}>
             <i className="ti ti-x" style={{ fontSize: 15 }} aria-hidden="true" />
           </button>
         </div>

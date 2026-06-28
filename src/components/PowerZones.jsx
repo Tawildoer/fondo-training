@@ -1,4 +1,5 @@
 import { ZONE_DEFINITIONS } from '../lib/planGenerator'
+import { estimateFtp } from '../lib/riderProfile'
 
 // HR zones run on their own %-of-max curve (not the power %FTP curve), shown
 // alongside power so each zone reads as one thing.
@@ -94,7 +95,7 @@ function ZoneLadder({ ftp, maxHR }) {
   )
 }
 
-export default function PowerZones({ user, ftpHistory = [] }) {
+export default function PowerZones({ user, ftpHistory = [], activities = [] }) {
   const ftp = user.ftp
   const maxHR = user.max_hr
 
@@ -102,6 +103,7 @@ export default function PowerZones({ user, ftpHistory = [] }) {
   const last = ftpHistory[ftpHistory.length - 1]
   const delta = first && last ? last.ftp - first.ftp : 0
   const fmt = d => new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
+  const est = estimateFtp(activities)
 
   return (
     <div>
@@ -118,8 +120,13 @@ export default function PowerZones({ user, ftpHistory = [] }) {
                 </span>
               )}
             </div>
+            {est && (
+              <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4 }}>
+                <i className="ti ti-bolt" style={{ color: 'var(--color-electric)' }} aria-hidden="true" /> Estimated from your rides: <strong>{est.ftp}W</strong> (best 20-min {est.fromBest20}W)
+              </div>
+            )}
             <p style={{ fontSize: 11, color: 'var(--color-text-faint)', marginTop: 7 }}>
-              Edit your FTP in <strong>Menu → Settings</strong>. It recalculates zones and plan targets — re-test every 4–6 weeks (recovery weeks are ideal).
+              Auto-updates from your rides, and the planner schedules a 20-min test every ~4 weeks. You can still edit it in <strong>Menu → Settings</strong>.
             </p>
           </div>
           <div style={{ flex: '1 1 260px', minWidth: 240, maxWidth: 460 }}>

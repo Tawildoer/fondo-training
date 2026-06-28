@@ -235,7 +235,7 @@ export default function Analytics({ user, ftpHistory = [], plan, sessionState = 
       </div>
       <SportLoadCard activities={activities} user={user} />
       {hasPower && <RiderRadar activities={activities} ftp={user?.ftp} ctl={loadCtx?.currentCtl} />}
-      {user?.ftp && <PowerZones user={user} ftpHistory={ftpHistory} />}
+      {user?.ftp && <PowerZones user={user} ftpHistory={ftpHistory} activities={activities} />}
     </div>
   )
 }

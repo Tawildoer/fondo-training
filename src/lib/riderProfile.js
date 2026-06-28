@@ -40,6 +40,30 @@ function scoreFor(ratio, a) {
   return clamp(r0(50 + ((ratio - a.ref50) / (a.ref85 - a.ref50)) * 35), 8, 100)
 }
 
+// ── FTP estimate from synced power ───────────────────────────
+// Estimate FTP from recent rides: 95% of the best 20-min power, or the best
+// 60-min power (≈ FTP by definition), whichever is higher — taken as the MAX
+// across the last ~6 weeks. Using the max self-guards the number: a single weak
+// ride can't drag it down (we keep the best), it only rises on a genuine hard
+// effort, and it only falls when no strong effort exists in the whole window
+// (real detraining). Returns { ftp, fromBest20 } or null without enough data.
+export function estimateFtp(activities, { now = new Date(), windowDays = 42 } = {}) {
+  const cutoff = now.getTime() - windowDays * 86400000
+  const rides = (activities || []).filter(a =>
+    a?.streams?.watts?.length && a.start_date && new Date(a.start_date).getTime() >= cutoff)
+  if (!rides.length) return null
+
+  let best = 0, best20 = 0
+  for (const act of rides) {
+    const mmp20 = meanMaximalPower(act, 1200)
+    if (mmp20 != null) { best = Math.max(best, mmp20 * 0.95); best20 = Math.max(best20, mmp20) }
+    const mmp60 = meanMaximalPower(act, 3600)
+    if (mmp60 != null) best = Math.max(best, mmp60)
+  }
+  if (best <= 0) return null // no usable ≥20-min effort in the window
+  return { ftp: r0(best), fromBest20: r0(best20) }
+}
+
 // Endurance = aerobic base: scaled from fitness (CTL) with a small bump for
 // proven long rides. CTL 45 ≈ 50, CTL 95 ≈ 90.
 function enduranceScore(ctl, longestSec) {
