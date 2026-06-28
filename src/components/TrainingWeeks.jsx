@@ -246,8 +246,8 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
           <i className="ti ti-brand-strava" style={{ fontSize: 14, color: '#FC4C02', flexShrink: 0 }} aria-hidden="true" />
           <span>{lastSynced ? `Synced ${lastSynced}` : 'Connected'}</span>
           {strava.syncMsg && <span style={{ opacity: 0.85 }}>· {strava.syncMsg}</span>}
-          <button className="btn btn-sm" onClick={strava.onSync} disabled={strava.syncing} title="Re-sync Strava rides">
-            <i className="ti ti-refresh" aria-hidden="true" /> {strava.syncing ? 'Syncing…' : 'Sync rides'}
+          <button className="btn btn-sm" onClick={strava.onSync} disabled={strava.syncing} title="Re-sync Strava workouts">
+            <i className="ti ti-refresh" aria-hidden="true" /> {strava.syncing ? 'Syncing…' : 'Sync workouts'}
           </button>
         </div>
       )}
