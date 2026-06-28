@@ -10,7 +10,7 @@
 
 import { getZoneLabel, getRunPace, getSwimPace, fmtPace } from './planGenerator'
 import { nextEvent, prevEvent, parseLocalDate, localDateStr } from './schedule'
-import { eventSport } from './sports'
+import { eventSport, disciplinesFor } from './sports'
 
 const ZONE_IF = { z1: 0.45, z2: 0.65, z3: 0.83, z4: 0.98, z5: 1.13 }
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -463,55 +463,88 @@ function hardZone(i, focus, length) {
   return i % 2 === 0 ? 'z4' : 'z3'
 }
 
-// Triathlon discipline assignment: spread swim/bike/run across the chosen days
-// with one weekend brick. Deterministic so re-planning is stable.
-function assignTriSports(onDays, target) {
+// ── Discipline blend from event proximity ────────────────────
+// The week's sport mix is driven entirely by how soon each upcoming event is:
+// every event contributes to its discipline(s) with a weight that decays with
+// distance (1.0 this week, 0.5 next, 0.33 in two, …), and a triathlon feeds all
+// three. So a bike race in 2 weeks ahead of a triathlon in 8 yields a mostly-
+// bike week with a little swim/run mixed in — and as the race passes and the
+// tri nears, the mix shifts toward an even swim/bike/run split.
+const SPORT_PRIORITY = ['bike', 'run', 'swim'] // stable tie-break order
+
+export function disciplineWeights(events, weekStart) {
+  const w = { bike: 0, run: 0, swim: 0 }
+  ;(events || []).forEach(e => {
+    const d = parseLocalDate(e.date)
+    if (!d) return
+    const weeks = Math.round((mondayOfDate(d) - mondayOfDate(weekStart)) / (7 * 86400000))
+    if (weeks < 0) return // past events no longer pull
+    const prox = 1 / (weeks + 1)
+    disciplinesFor(eventSport(e.event_type)).forEach(s => { w[s] += prox })
+  })
+  return w
+}
+
+// Turn discipline weights into a whole number of days each, via largest-
+// remainder rounding so the split matches the weights as closely as possible.
+function allocateDays(weights, nDays) {
+  const total = SPORT_PRIORITY.reduce((a, s) => a + (weights[s] || 0), 0)
+  if (total <= 0 || nDays <= 0) return { bike: nDays, run: 0, swim: 0 }
+  const raw = {}, counts = {}
+  SPORT_PRIORITY.forEach(s => { raw[s] = (weights[s] || 0) / total * nDays; counts[s] = Math.floor(raw[s]) })
+  let used = SPORT_PRIORITY.reduce((a, s) => a + counts[s], 0)
+  const byRemainder = [...SPORT_PRIORITY].sort((a, b) => (raw[b] - counts[b]) - (raw[a] - counts[a]))
+  for (let i = 0; used < nDays; i++, used++) counts[byRemainder[i % byRemainder.length]]++
+  return counts
+}
+
+// Assign a discipline to each chosen day from the weighted day-counts, spread
+// so the same sport doesn't stack three days running; when a triathlon is in
+// the mix (swim has days) one weekend bike becomes a brick.
+function assignSportsByWeight(onDays, weights, target) {
+  const nDays = onDays.length
+  if (!nDays) return {}
+  const counts = allocateDays(weights, nDays)
+  const active = SPORT_PRIORITY.filter(s => counts[s] > 0)
+  if (active.length <= 1) return Object.fromEntries(onDays.map(d => [d, active[0] || 'bike']))
+
+  const remaining = { ...counts }
   const out = {}
-  const weekend = onDays.filter(d => d === 'Sat' || d === 'Sun')
-  const weekday = onDays.filter(d => d !== 'Sat' && d !== 'Sun')
+  let prev = null
+  onDays.forEach(day => {
+    const pick = SPORT_PRIORITY.filter(s => remaining[s] > 0).sort((a, b) => remaining[b] - remaining[a])
+    const choice = pick.find(s => s !== prev) || pick[0]
+    out[day] = choice
+    remaining[choice]--
+    prev = choice
+  })
 
-  // A brick on a weekend day (Sat preferred), except in a recovery week.
-  let brickDay = null
-  if (!target.isRecovery && weekend.length) {
-    brickDay = weekend.includes('Sat') ? 'Sat' : weekend[0]
-    out[brickDay] = 'brick'
-  }
-  // Long bike on any other weekend day.
-  weekend.filter(d => d !== brickDay).forEach(d => { out[d] = 'bike' })
-
-  // Weekdays round-robin run → swim → bike (run carries most weekly volume),
-  // which also keeps the same discipline from landing three days running.
-  const cycle = ['run', 'swim', 'bike']
-  weekday.forEach((d, i) => { out[d] = cycle[i % cycle.length] })
-
-  // Guarantee a swim if there's room for one and the rotation missed it.
-  if (onDays.length >= 3 && !Object.values(out).includes('swim')) {
-    const swap = weekday.find(d => out[d] === 'bike') || weekday[0]
-    if (swap) out[swap] = 'swim'
+  if (!target.isRecovery && counts.swim > 0) {
+    const weekendBike = ['Sat', 'Sun'].find(d => out[d] === 'bike')
+    if (weekendBike) out[weekendBike] = 'brick'
   }
   return out
 }
 
-// The discipline each chosen day will be — single-sport everywhere, or the tri
-// spread. Exported so the planner UI can preview the same badges draftWeek uses.
-export function sportsForWeek(inputs, target, goalSport = 'bike') {
+// The discipline each chosen day will be, from the proximity-weighted blend.
+// Exported so the planner UI can preview the same badges draftWeek uses.
+export function sportsForWeek(inputs, target, weights) {
   const onDays = DAY_NAMES.filter(d => (inputs?.days || {})[d])
-  if (goalSport === 'tri') return assignTriSports(onDays, target)
-  return Object.fromEntries(onDays.map(d => [d, goalSport === 'run' ? 'run' : 'bike']))
+  return assignSportsByWeight(onDays, weights || { bike: 1, run: 0, swim: 0 }, target)
 }
 
 // Lay the week out directly from your per-day choices: each on-day carries a
 // length (S/M/L) and a type (easy/hard). Off-days are rest. A recovery week
-// forces everything easy. `goalSport` ('bike' | 'run' | 'tri') comes from the
-// event being trained for; tri weeks mix all three disciplines.
-export function draftWeek(target, inputs, ftp, goalSport = 'bike') {
+// forces everything easy. `weights` is the proximity-driven discipline blend
+// (see disciplineWeights); a week mixes sports whenever events overlap.
+export function draftWeek(target, inputs, ftp, weights) {
   const days = inputs?.days || {}
   const focus = inputs?.focus || 'none'
   const onDays = DAY_NAMES.filter(d => days[d])
   if (!onDays.length) return DAY_NAMES.map(restDay)
 
-  // Per-day discipline: single-sport everywhere, or the tri spread.
-  const sportByDay = sportsForWeek(inputs, target, goalSport)
+  // Per-day discipline from the proximity blend.
+  const sportByDay = sportsForWeek(inputs, target, weights)
 
   // Long session = the longest easy day, but never a swim or brick day.
   const longEasy = onDays

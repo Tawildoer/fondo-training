@@ -1,10 +1,10 @@
 import { useState, useMemo } from 'react'
 import { localDateStr, nextEvent, prevEvent } from '../lib/schedule'
 import {
-  computeWeekTarget, draftWeek, projectCtl, buildSession, sportsForWeek,
+  computeWeekTarget, draftWeek, projectCtl, buildSession, sportsForWeek, disciplineWeights,
   ZONE_OPTIONS, DAY_NAMES, TIER_MIN, TIER_LABEL, strengthEligible,
 } from '../lib/weeklyPlanner'
-import { SPORTS, eventSport } from '../lib/sports'
+import { SPORTS } from '../lib/sports'
 
 const LENGTHS = ['S', 'M', 'L']
 
@@ -182,12 +182,13 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   // much to aim for before you even slide the days.
   const suggestion = useMemo(() => withCarry(computeWeekTarget(inputs, ctx)), [inputs, ctx, carryIn])
 
-  // The discipline this week trains for (from the nearest event). For run/tri
-  // events the planner assigns a sport to each day; bike weeks are unchanged.
-  const goalSport = ev ? eventSport(ev.event_type) : 'bike'
-  const sportByDay = useMemo(
-    () => goalSport === 'bike' ? {} : sportsForWeek(inputs, suggestion, goalSport),
-    [inputs, suggestion, goalSport])
+  // The week's discipline blend is driven entirely by event proximity — every
+  // upcoming event pulls its sport(s) in, weighted by how soon it is, so weeks
+  // blend (e.g. mostly bike before a near road race, with some swim/run for a
+  // later triathlon). Bike-only weeks carry no per-day sport.
+  const weights = useMemo(() => disciplineWeights(events, weekStart), [events, weekStart])
+  const sportByDay = useMemo(() => sportsForWeek(inputs, suggestion, weights), [inputs, suggestion, weights])
+  const multiSport = useMemo(() => Object.values(sportByDay).some(s => s !== 'bike'), [sportByDay])
 
   const weekLabel = weekStart.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
@@ -208,7 +209,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
   async function generate() {
     setSaving(true)
     const t = withCarry(computeWeekTarget(inputs, ctx))
-    const draft = draftWeek(t, inputs, user.ftp, goalSport)
+    const draft = draftWeek(t, inputs, user.ftp, weights)
     // Preserve locked days (completed/past) exactly; only redraft the rest.
     const sessions = draft.map((s, i) => lockedIdx.has(i)
       ? (existing?.sessions?.[i] || buildSession(DAY_NAMES[i], 'rest', 0, user.ftp))
@@ -358,8 +359,8 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                           options={LENGTHS.map(l => ({ v: l, label: TIER_LABEL[l] }))} />
                         <MiniSeg value={d.type} onChange={v => setDayField(day, 'type', v)}
                           options={[{ v: 'easy', label: 'Easy' }, { v: 'hard', label: 'Hard' }]} />
-                        {goalSport !== 'bike' && sportByDay[day] && (
-                          <span title="Auto-assigned discipline" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--color-accent-text)' }}>
+                        {multiSport && sportByDay[day] && (
+                          <span title="Auto-assigned by event proximity" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--color-accent-text)' }}>
                             <i className={`ti ${SPORTS[sportByDay[day]]?.icon || ''}`} aria-hidden="true" /> {SPORTS[sportByDay[day]]?.label}
                           </span>
                         )}
