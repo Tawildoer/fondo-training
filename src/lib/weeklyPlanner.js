@@ -85,7 +85,7 @@ const TSS_PER_HOUR = 52 // endurance-weighted blended week
 
 export function computeWeekTarget(inputs, ctx = {}) {
   const { goal = 'build', freshness = 3, focus = 'none', busy = false } = inputs || {}
-  const { currentTsb = null, recentWeeklyTss = 0, weeklyHoursStart = 0, daysPerWeek = 5, weeksToEvent = null, weeksSinceEvent = null, weekNum = 1, eventType = null, riderType = 'all_rounder' } = ctx
+  const { currentTsb = null, currentCtl = null, recentWeeklyTss = 0, weeklyHoursStart = 0, daysPerWeek = 5, weeksToEvent = null, weeksSinceEvent = null, weekNum = 1, eventType = null, riderType = 'all_rounder' } = ctx
 
   // Where you start and a sustainable ceiling (classic ~1.8× start, capped by
   // how many days you ride). Pure sports-science heuristics on your profile.
@@ -127,10 +127,13 @@ export function computeWeekTarget(inputs, ctx = {}) {
   if (weeksSinceEvent === 2) reentryFactor = 0.8
   else if (weeksSinceEvent === 3) reentryFactor = 0.9
 
-  // Recovery week + subjective modifiers.
+  // A true recovery week (all-easy) is a *scheduled/structural* deload: a manual
+  // toggle, the week after a race, or every 4th week. Deep fatigue is handled
+  // separately below — it eases volume and holds intensity until you've recovered
+  // *within* the week, rather than writing the whole week off.
   const deeplyFatigued = currentTsb != null && currentTsb <= -25
   const postEventRecovery = weeksSinceEvent === 1
-  const isRecovery = focus === 'recovery' || deeplyFatigued || postEventRecovery || (weekNum > 0 && weekNum % 4 === 0)
+  const isRecovery = focus === 'recovery' || postEventRecovery || (weekNum > 0 && weekNum % 4 === 0)
   const freshnessFactor = [0.85, 0.85, 0.92, 1.0, 1.05, 1.1][clamp(freshness, 1, 5)]
   const busyFactor = busy ? 0.7 : 1
 
@@ -139,6 +142,7 @@ export function computeWeekTarget(inputs, ctx = {}) {
   let factor = Math.min(eventFactor, reentryFactor) * freshnessFactor * busyFactor
   if (reentryFactor < 1 && eventFactor >= 1) phase = 'Rebuild'
   if (isRecovery) { factor = 0.6 * busyFactor; phase = postEventRecovery ? 'Post-race recovery' : 'Recovery' }
+  else if (deeplyFatigued) { factor *= 0.8; phase = 'Fatigued' } // lighter, but not all-easy
 
   let targetHours = baseHours * factor
   targetHours = clamp(targetHours, startHours * (isRecovery ? 0.4 : 0.5), maxHours * 1.05)
@@ -151,6 +155,17 @@ export function computeWeekTarget(inputs, ctx = {}) {
     currentTsb, busy, isRecovery, availDays: countAvailable(inputs),
   })
 
+  // Deep fatigue: don't slot quality onto days you haven't recovered for. Project
+  // form (TSB) forward across the week from an all-easy baseline and only allow
+  // quality once it climbs back above the readiness line — typically later in the
+  // week — capping it to a single day.
+  if (!isRecovery && deeplyFatigued && quality.count > 0) {
+    applyReadinessGate(quality, { inputs, currentCtl, currentTsb })
+  }
+  quality.reason = buildIntensityReason({
+    isRecovery, postEventRecovery, weekNum, deeplyFatigued, currentTsb, quality, weeksToEvent,
+  })
+
   return {
     targetHours,
     targetTss: Math.round(targetHours * TSS_PER_HOUR),
@@ -160,6 +175,52 @@ export function computeWeekTarget(inputs, ctx = {}) {
     hardDays: quality.count, // kept for any legacy reader
     note: buildNote({ phase, goal, weeksToEvent, weeksSinceEvent, isRecovery, busy, deeplyFatigued }),
   }
+}
+
+// ── Form-aware readiness gate ─────────────────────────────────
+const READY_TSB = -20 // form must climb back above this before quality returns
+
+// An easy day's estimated load, by length — the baseline we recover along.
+const easyDayLoad = minutes => tssFor(minutes <= 45 ? 'z1' : 'z2', minutes)
+
+// Roll CTL/ATL forward Mon→Sun along an all-easy version of the week and find
+// the first riding day on which form (the TSB you *carry into* that day) has
+// recovered past READY_TSB. Mutates `quality`: holds it to ≤1 day from that day
+// on, or zeroes it if recovery never gets there this week.
+function applyReadinessGate(quality, { inputs, currentCtl, currentTsb }) {
+  if (currentCtl == null || currentTsb == null) return // no form data → leave as-is
+  const days = inputs?.days || {}
+  let ctl = currentCtl
+  let atl = currentCtl - currentTsb // ATL = CTL − TSB
+  let earliest = null
+  for (const day of DAY_NAMES) {
+    const tsbInto = ctl - atl
+    if (days[day] && earliest == null && tsbInto >= READY_TSB) earliest = day
+    const load = days[day] ? easyDayLoad(TIER_MIN[days[day].length] || 90) : 0
+    ctl += (load - ctl) / 42
+    atl += (load - atl) / 7
+  }
+  if (earliest == null) { quality.count = 0; quality.zones = []; quality.earliestDay = null; return }
+  quality.count = 1               // one cautious quality day when fatigued
+  quality.zones = ['z4']          // threshold is the sensible re-entry — not VO₂ off deep fatigue
+  quality.earliestDay = earliest  // draftWeek won't place it before this day
+}
+
+// One-line "why this week" explanation of the intensity decision.
+function buildIntensityReason({ isRecovery, postEventRecovery, weekNum, deeplyFatigued, currentTsb, quality, weeksToEvent }) {
+  const mix = quality.zones.map(z => ({ z3: 'sweet-spot', z4: 'threshold', z5: 'VO₂' }[z] || z)).join(' + ')
+  if (isRecovery) {
+    if (postEventRecovery) return 'Recovery week after your event — all endurance to absorb it.'
+    if (weekNum > 0 && weekNum % 4 === 0) return 'Scheduled recovery week (every 4th week) — all endurance to absorb the block.'
+    return 'Recovery week — all endurance, intensity paused.'
+  }
+  if (deeplyFatigued) {
+    if (quality.count === 0) return `Form is deep in the red (TSB ${Math.round(currentTsb)}) — endurance only this week while you recover.`
+    return `Form is deep in the red (TSB ${Math.round(currentTsb)}) — easy early week, then a ${mix} day later on once your form's back out of the red (≈ ${quality.earliestDay}).`
+  }
+  if (quality.count === 0) return 'All endurance this week — building aerobic base.'
+  const taper = weeksToEvent != null && weeksToEvent <= 2
+  return `${quality.count} quality day${quality.count > 1 ? 's' : ''} · ${mix}${taper ? ' — sharpening for your event' : ''}.`
 }
 
 // ── Auto intensity engine ────────────────────────────────────
@@ -209,8 +270,8 @@ export function planQuality(ctx = {}) {
   else if (weeksToEvent != null) count = 2                              // base build toward event
   else count = goal === 'build' ? 2 : 1                                  // no event
 
-  // 2. Fatigue / busyness pull it back.
-  if (currentTsb != null && currentTsb <= -25) count -= 1
+  // 2. Busyness pulls it back. (Deep fatigue is handled by the readiness gate in
+  // computeWeekTarget, which projects recovery rather than blanket-cutting.)
   if (busy) count -= 1
 
   // 3. Always leave at least one endurance day; cap at 3 quality days.
@@ -668,7 +729,13 @@ export function draftWeek(target, inputs, ftp, weights) {
   // spaced away from the long ride and each other. Zones are hardest-first; we
   // lay them out in calendar order so the hardest lands earliest in the week.
   const quality = target.quality || { count: 0, zones: [] }
-  const qCandidates = onDays.filter(d => isSingleRide(d) && d !== longDay)
+  let qCandidates = onDays.filter(d => isSingleRide(d) && d !== longDay)
+  // When fatigue has gated quality to later in the week, don't place it before
+  // the day form is projected to have recovered.
+  if (quality.earliestDay) {
+    const minIdx = DAY_NAMES.indexOf(quality.earliestDay)
+    qCandidates = qCandidates.filter(d => DAY_NAMES.indexOf(d) >= minIdx)
+  }
   const qDays = target.isRecovery ? [] : pickQualityDays(qCandidates, longDay, quality.count)
   const qZoneByDay = {}
   qDays.slice().sort((a, b) => DAY_NAMES.indexOf(a) - DAY_NAMES.indexOf(b))

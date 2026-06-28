@@ -117,6 +117,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
 
   const ctx = useMemo(() => ({
     currentTsb: loadCtx?.currentTsb ?? null,
+    currentCtl: loadCtx?.currentCtl ?? null,  // for the form-aware readiness gate
     recentWeeklyTss: loadCtx?.recentWeeklyTss || 0,
     weeklyHoursStart: user.weekly_hours_start || 0,
     daysPerWeek: user.days_per_week || 5,
@@ -255,12 +256,10 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
                   </span>
                 </div>
                 <div style={{ fontSize: 12, opacity: 0.9, marginTop: 3, lineHeight: 1.4 }}>{suggestion.note}</div>
-                {suggestion.quality && (
-                  <div style={{ fontSize: 11, fontWeight: 600, marginTop: 5, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <i className="ti ti-bolt" style={{ color: 'var(--color-electric)' }} aria-hidden="true" />
-                    {suggestion.quality.count === 0
-                      ? 'All endurance this week'
-                      : `${suggestion.quality.count} quality day${suggestion.quality.count > 1 ? 's' : ''} · ${suggestion.quality.zones.map(z => ZONE_INTENSITY[z]).join(' + ')}`}
+                {suggestion.quality?.reason && (
+                  <div title="Why this week looks the way it does" style={{ fontSize: 11, fontWeight: 600, marginTop: 5, display: 'flex', alignItems: 'flex-start', gap: 6, lineHeight: 1.4 }}>
+                    <i className="ti ti-bolt" style={{ color: 'var(--color-electric)', flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+                    <span>{suggestion.quality.reason}</span>
                   </div>
                 )}
                 {carryIn > 0 && (
