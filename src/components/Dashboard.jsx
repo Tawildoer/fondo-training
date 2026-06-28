@@ -72,8 +72,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
 
   // Transient "we rebalanced your week" notice with an undo affordance.
   const [rebalanceToast, setRebalanceToast] = useState(null)
-  // Transient "FTP auto-updated from your rides" notice.
-  const [ftpToast, setFtpToast] = useState(null)
+  // De-dupe guard for the silent FTP auto-update.
   const lastAutoFtpRef = useRef(null)
 
   // Zwift folder sync: a granted directory handle (persisted in IndexedDB) plus
@@ -404,7 +403,6 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
       if (lastAutoFtpRef.current === est.ftp) return
       lastAutoFtpRef.current = est.ftp
       handleUpdateFTP(est.ftp)
-      setFtpToast({ from: null, to: est.ftp })
       return
     }
     const drift = est.ftp - cur
@@ -418,8 +416,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
     const capped = Math.round(Math.max(cur * 0.88, Math.min(cur * 1.12, est.ftp)))
     if (capped === cur || lastAutoFtpRef.current === capped) return
     lastAutoFtpRef.current = capped
-    handleUpdateFTP(capped)
-    setFtpToast({ from: cur, to: capped })
+    handleUpdateFTP(capped) // silent — surfaced in Analytics, overridable in Settings
   }, [loading, activities, user.ftp])
 
   const streak = useMemo(
@@ -587,17 +584,6 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
         </div>
       )}
 
-      {ftpToast && (
-        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', marginBottom: 12, borderLeft: '3px solid var(--color-electric)' }}>
-          <i className="ti ti-bolt" style={{ fontSize: 17, color: 'var(--color-electric)', flexShrink: 0 }} aria-hidden="true" />
-          <span style={{ flex: 1, fontSize: 13, lineHeight: 1.45 }}>
-            {ftpToast.from ? `FTP updated ${ftpToast.from} → ${ftpToast.to} W from your recent rides.` : `FTP set to ${ftpToast.to} W from your recent rides.`} Zones recalculated.
-          </span>
-          <button onClick={() => setFtpToast(null)} aria-label="Dismiss" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', display: 'flex', padding: 4 }}>
-            <i className="ti ti-x" style={{ fontSize: 15 }} aria-hidden="true" />
-          </button>
-        </div>
-      )}
 
       <div className="tabs" ref={tabsRef}>
         <span
