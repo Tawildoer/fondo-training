@@ -11,7 +11,6 @@ import { getScheduledSessions, localDateStr, parseLocalDate } from './schedule'
 // Intensity factor per zone (midpoint of the zone's % of FTP) for estimates.
 const ZONE_IF = { z1: 0.45, z2: 0.65, z3: 0.83, z4: 0.98, z5: 1.13 }
 
-const DAY_MS = 24 * 60 * 60 * 1000
 const CTL_TC = 42 // fitness time constant (days)
 const ATL_TC = 7  // fatigue time constant (days)
 
@@ -152,16 +151,22 @@ export function computeTrainingLoad(plan, sessionState, activities, user, planSt
   const start = new Date(Math.min(earliest ? earliest.getTime() : today.getTime(), today.getTime()))
   start.setHours(0, 0, 0, 0)
 
+  // Walk real local calendar days (not fixed 24h steps): a fixed-ms step drifts
+  // off local midnight across a DST change, which mis-keys days and can stop the
+  // series a day short of today. setDate(+1) stays on true local midnights.
   const series = []
   let ctl = 0
   let atl = 0
-  for (let t = start.getTime(); t <= today.getTime(); t += DAY_MS) {
-    const k = localDateStr(new Date(t))
+  const cursor = new Date(start)
+  while (cursor.getTime() <= today.getTime()) {
+    const k = localDateStr(cursor)
     // Real ride load wins on days that have it; else the planned estimate.
     const load = rideByDay[k] != null ? rideByDay[k] : (plannedByDay[k] || 0)
     ctl += (load - ctl) / CTL_TC
     atl += (load - atl) / ATL_TC
-    series.push({ date: new Date(t), load, ctl, atl, tsb: ctl - atl })
+    series.push({ date: new Date(cursor), load, ctl, atl, tsb: ctl - atl })
+    cursor.setDate(cursor.getDate() + 1)
+    cursor.setHours(0, 0, 0, 0)
   }
 
   const last = series[series.length - 1]
