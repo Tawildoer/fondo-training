@@ -13,6 +13,7 @@ import CalendarView from './CalendarView'
 import PlanGuide from './PlanGuide'
 import WeeklyPlanner from './WeeklyPlanner'
 import AccountMenu from './AccountMenu'
+import WhatsNew from './WhatsNew'
 import { buildSession } from '../lib/weeklyPlanner'
 import { estimateFtp } from '../lib/riderProfile'
 import { rebalanceForBail } from '../lib/rebalance'
@@ -549,6 +550,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
 
   return (
     <div className="app-shell">
+      <WhatsNew />
       {/* Hero header */}
       <div className="hero">
         <div style={{ flex: 1, minWidth: 0 }}>
