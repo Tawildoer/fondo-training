@@ -159,6 +159,54 @@ function PlanWeekCTA({ onPlanWeek }) {
   )
 }
 
+// Lightweight, self-clearing nudges: things worth doing now that resolve on
+// their own once handled (plan next week, an FTP test waiting this week). The
+// existing PlanWeekCTA (plan THIS week) and CatchUpCard (log rides) cover the
+// rest, so we don't repeat them here.
+function Reminders({ plannedWeeks, realCurrentWeek, sessionState, onPlanWeek }) {
+  const items = []
+
+  // Only nudge weekly-planner users (they have planned weeks at all).
+  if (plannedWeeks.length) {
+    const planned = n => plannedWeeks.some(w => w.week_num === n)
+    const dow = new Date().getDay() // 0 Sun … 6 Sat
+    const lateInWeek = dow === 0 || dow >= 4 // Thu–Sun: time to look ahead
+    // Plan next week — once this week is set but next isn't, late in the week.
+    if (lateInWeek && planned(realCurrentWeek) && !planned(realCurrentWeek + 1)) {
+      items.push({
+        id: 'plan-next', icon: 'ti-calendar-plus',
+        text: "Next week isn't planned yet — set it up while this week winds down.",
+        action: { label: 'Plan next week', onClick: onPlanWeek },
+      })
+    }
+    // FTP test waiting this week.
+    const cur = plannedWeeks.find(w => w.week_num === realCurrentWeek)
+    const testIdx = cur?.sessions?.findIndex(s => s?.test)
+    if (testIdx != null && testIdx >= 0) {
+      const tst = sessionState[`w${realCurrentWeek}_${testIdx}`] || {}
+      if (!tst.completed && !tst.bailed) {
+        items.push({
+          id: 'ftp-test', icon: 'ti-gauge',
+          text: 'FTP test on the plan this week — ride it fresh; your FTP updates itself afterwards.',
+        })
+      }
+    }
+  }
+
+  if (!items.length) return null
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '1.25rem' }}>
+      {items.map(it => (
+        <div key={it.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', marginBottom: 0, borderLeft: '3px solid var(--color-electric)' }}>
+          <i className={`ti ${it.icon}`} style={{ fontSize: 18, color: 'var(--color-electric)', flexShrink: 0 }} aria-hidden="true" />
+          <span style={{ flex: 1, fontSize: 13, lineHeight: 1.45 }}>{it.text}</span>
+          {it.action && <button className="btn btn-sm btn-primary" onClick={it.action.onClick} style={{ flexShrink: 0 }}>{it.action.label}</button>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function AdaptationBanner({ adaptation }) {
   if (!adaptation) return null
   return (
@@ -305,6 +353,7 @@ export default function Overview({ user, plan, sessionState = {}, planStart, ada
     <div>
       {needsPlan && <PlanWeekCTA onPlanWeek={onPlanWeek} />}
       <CatchUpCard unconfirmed={unconfirmed} onToggle={onToggle} onBail={onBail} onRPE={onRPE} />
+      <Reminders plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} sessionState={sessionState} onPlanWeek={onPlanWeek} />
       <AdaptationBanner adaptation={adaptation} />
 
       <GreetingHero name={user.name} tsb={tl.hasData ? tl.current.tsb : null} />
