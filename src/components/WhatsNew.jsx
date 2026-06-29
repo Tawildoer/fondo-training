@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react'
 // Each user sees only the current note, once. Old notes are not replayed.
 // ───────────────────────────────────────────────────────────────────────────
 const RELEASE = {
-  id: '2026-06-29.4',
+  id: '2026-06-29.5',
   date: '29 June 2026',
   changes: [
     { tag: 'Planner', text: 'Adaptive intensity — weekly quality (sweet-spot / threshold / VO₂) is auto-prescribed from event type, rider profile, phase and current fatigue. The manual easy/hard control is removed.' },
@@ -49,12 +49,14 @@ const STEPS = {
   ],
 }
 
-// Fixed-width category column so every row's tag aligns into a clean table.
+const LINE = '1px solid var(--color-border)'
+const cellBase = { verticalAlign: 'top', padding: '10px 0' }
 const tagCell = {
-  width: 78, flexShrink: 0, paddingTop: 1,
+  ...cellBase, width: 86, paddingRight: 14, borderRight: LINE,
   fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-  color: 'var(--color-accent-text)',
+  color: 'var(--color-text-muted)', whiteSpace: 'nowrap',
 }
+const textCell = { ...cellBase, paddingLeft: 14, fontSize: 13, lineHeight: 1.5 }
 
 export default function WhatsNew() {
   const [open, setOpen] = useState(false)
@@ -87,14 +89,16 @@ export default function WhatsNew() {
         </div>
 
         <div style={{ padding: '14px 20px' }}>
-          <div>
-            {RELEASE.changes.map((c, i) => (
-              <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', padding: '10px 0', borderTop: i ? '1px solid var(--color-border)' : 'none' }}>
-                <span style={tagCell}>{c.tag}</span>
-                <span style={{ flex: 1, fontSize: 13, lineHeight: 1.5 }}>{c.text}</span>
-              </div>
-            ))}
-          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: LINE, borderBottom: LINE }}>
+            <tbody>
+              {RELEASE.changes.map((c, i) => (
+                <tr key={i} style={{ borderTop: i ? LINE : 'none' }}>
+                  <td style={tagCell}>{c.tag}</td>
+                  <td style={textCell}>{c.text}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
           {!installed ? (
             <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--color-border)' }}>
