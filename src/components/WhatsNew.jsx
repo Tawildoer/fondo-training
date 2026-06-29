@@ -8,7 +8,7 @@ import { useState, useEffect } from 'react'
 // Each user sees only the current note, once. Old notes are not replayed.
 // ───────────────────────────────────────────────────────────────────────────
 const RELEASE = {
-  id: '2026-06-29.3',
+  id: '2026-06-29.4',
   date: '29 June 2026',
   changes: [
     { tag: 'Planner', text: 'Adaptive intensity — weekly quality (sweet-spot / threshold / VO₂) is auto-prescribed from event type, rider profile, phase and current fatigue. The manual easy/hard control is removed.' },
@@ -49,10 +49,11 @@ const STEPS = {
   ],
 }
 
-const tagChip = {
-  fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
-  color: 'var(--color-accent-text)', background: 'var(--color-accent-light)',
-  borderRadius: 4, padding: '2px 6px', flexShrink: 0, minWidth: 64, textAlign: 'center',
+// Fixed-width category column so every row's tag aligns into a clean table.
+const tagCell = {
+  width: 78, flexShrink: 0, paddingTop: 1,
+  fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+  color: 'var(--color-accent-text)',
 }
 
 export default function WhatsNew() {
@@ -86,11 +87,11 @@ export default function WhatsNew() {
         </div>
 
         <div style={{ padding: '14px 20px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
             {RELEASE.changes.map((c, i) => (
-              <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <span style={tagChip}>{c.tag}</span>
-                <span style={{ fontSize: 13, lineHeight: 1.45 }}>{c.text}</span>
+              <div key={i} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', padding: '10px 0', borderTop: i ? '1px solid var(--color-border)' : 'none' }}>
+                <span style={tagCell}>{c.tag}</span>
+                <span style={{ flex: 1, fontSize: 13, lineHeight: 1.5 }}>{c.text}</span>
               </div>
             ))}
           </div>
