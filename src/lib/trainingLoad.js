@@ -121,10 +121,13 @@ export function computeTrainingLoad(plan, sessionState, activities, user, planSt
   const paceOpts = { thresholdPaceRun: user?.threshold_pace_run, cssSwim: user?.css_swim }
 
   // 1. Real load from every synced activity (bike/run/swim), bucketed by day.
+  // Key off the stored date STRING (start_date_local, already local wall-clock),
+  // not new Date(...) — Strava formats local time with a "Z", so parsing it can
+  // shift the ride to the wrong calendar day. This matches matchActivityToDate.
   const rideByDay = {}
   ;(activities || []).forEach(a => {
     if (!a.start_date) return
-    const k = localDateStr(new Date(a.start_date))
+    const k = a.start_date.slice(0, 10)
     rideByDay[k] = (rideByDay[k] || 0) + estActivityTSS(a, ftp, maxHr, paceOpts)
   })
 

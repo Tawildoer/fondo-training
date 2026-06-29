@@ -171,7 +171,7 @@ export function RecentRides({ activities = [], ftp, maxHr, thresholdPaceRun, css
       ) : (
         <div>
           {rides.map((a, i) => {
-            const d = new Date(a.start_date)
+            const d = new Date(a.start_date.slice(0, 10) + 'T00:00:00') // local date (avoid the start_date "Z" shift)
             const tss = estActivityTSS(a, ftp, maxHr, { thresholdPaceRun, cssSwim })
             const aSport = activitySport(a)
             const km = a.distance_m ? (a.distance_m / 1000).toFixed(a.distance_m >= 100000 ? 0 : 1) : null
