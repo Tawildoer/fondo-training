@@ -461,7 +461,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                     <SteadyTargets zone="z4" sport="bike" ftp={user?.ftp} maxHr={user?.max_hr} />
                                     <div style={{ fontSize: 11.5, lineHeight: 1.5, opacity: 0.9, marginTop: 8 }}>
                                       Warm up, then ride the 20 min as hard as you can hold evenly — pace it like a time trial.
-                                      95% of your 20-min average becomes your new FTP, applied automatically once you sync.
+                                      95% of your 20-min average is your new FTP — set it in Settings.
                                     </div>
                                   </div>
                                 ) : structured ? (

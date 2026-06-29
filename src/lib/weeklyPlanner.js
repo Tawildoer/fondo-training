@@ -396,7 +396,7 @@ export function buildFtpTest(day, ftp, dayMinutes = FTP_TEST_CORE) {
   const topUpMin = dayMinutes > FTP_TEST_CORE + 10 ? clamp(Math.round(dayMinutes - FTP_TEST_CORE), 0, 60) : 0
   const total = FTP_TEST_CORE + topUpMin
   const desc = `15 min build → 20 min all-out → 10 min easy${topUpMin ? ` → ${topUpMin} min Z2 endurance` : ''}. ` +
-    `Hold the highest even power you can for the 20 min — 95% of that average becomes your new FTP (auto-applied once you sync).`
+    `Hold the highest even power you can for the 20 min — 95% of that average is your new FTP; update it in Settings.`
   return { day, zone: 'z4', test: true, name: 'FTP test', desc, durationMin: total, topUpMin }
 }
 

@@ -15,7 +15,6 @@ import WeeklyPlanner from './WeeklyPlanner'
 import AccountMenu from './AccountMenu'
 import WhatsNew from './WhatsNew'
 import { buildSession } from '../lib/weeklyPlanner'
-import { estimateFtp } from '../lib/riderProfile'
 import { rebalanceForBail } from '../lib/rebalance'
 import { buildZwo } from '../lib/zwo'
 import { downloadZwo, supportsFolderSync, linkZwiftFolder, loadHandle, forgetHandle, permission as zwiftPermission, writeSessions } from '../lib/zwiftSync'
@@ -73,8 +72,6 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
 
   // Transient "we rebalanced your week" notice with an undo affordance.
   const [rebalanceToast, setRebalanceToast] = useState(null)
-  // De-dupe guard for the silent FTP auto-update.
-  const lastAutoFtpRef = useRef(null)
 
   // Zwift folder sync: a granted directory handle (persisted in IndexedDB) plus
   // a small status line for the connect card.
@@ -389,36 +386,6 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
       upsertSessionState(user.id, weekNum, idx, { completed: true, bailed: false, auto_completed: true, completed_at: completedAt })
     )
   }, [loading, plan, activities, planStart, sessionState, user.id])
-
-  // Auto-FTP: estimate FTP from recent synced power and apply it when it drifts
-  // meaningfully from the saved value (rezones + logs to history). The estimate
-  // is the best effort across ~6 weeks, so it only rises on a genuine hard ride
-  // and only falls on real detraining; we cap the change per update and de-dupe
-  // with a ref so it can't flap.
-  useEffect(() => {
-    if (loading) return
-    const est = estimateFtp(activities)
-    if (!est) return
-    const cur = user.ftp || 0
-    if (!cur) { // no FTP yet → seed it
-      if (lastAutoFtpRef.current === est.ftp) return
-      lastAutoFtpRef.current = est.ftp
-      handleUpdateFTP(est.ftp)
-      return
-    }
-    const drift = est.ftp - cur
-    // Raise readily on a strong effort; lower only on a clear, sustained drop so
-    // an easy base block doesn't nibble FTP down between tests.
-    const meaningful = drift > 0
-      ? (drift >= 5 && drift / cur >= 0.02)
-      : (-drift >= 10 && -drift / cur >= 0.05)
-    if (!meaningful) return
-    // Cap any single auto-change to ±12% so a freak number can't lurch zones.
-    const capped = Math.round(Math.max(cur * 0.88, Math.min(cur * 1.12, est.ftp)))
-    if (capped === cur || lastAutoFtpRef.current === capped) return
-    lastAutoFtpRef.current = capped
-    handleUpdateFTP(capped) // silent — surfaced in Analytics, overridable in Settings
-  }, [loading, activities, user.ftp])
 
   const streak = useMemo(
     () => computeStreak(plan, sessionState, planStart),
