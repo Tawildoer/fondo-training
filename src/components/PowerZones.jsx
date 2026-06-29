@@ -30,11 +30,16 @@ function FtpChart({ history }) {
   const max = Math.max(...values)
   const range = (max - min) || 1
   const n = history.length
-  const xAt = i => (n === 1 ? W / 2 : padL + (i / (n - 1)) * (W - padL - padR))
+  // X is a real time axis: points sit at their actual date, so the gaps between
+  // entries reflect how far apart they were recorded.
+  const times = history.map(h => new Date(h.recorded_at).getTime())
+  const tMin = Math.min(...times)
+  const tRange = (Math.max(...times) - tMin) || 1
+  const xAt = t => (n === 1 ? W / 2 : padL + ((t - tMin) / tRange) * (W - padL - padR))
   const yAt = v => padT + (1 - (v - min) / range) * (H - padT - padB)
-  const points = history.map((h, i) => ({ x: xAt(i), y: yAt(h.ftp), ftp: h.ftp, date: new Date(h.recorded_at) }))
+  const points = history.map((h, i) => ({ x: xAt(times[i]), y: yAt(h.ftp), ftp: h.ftp, date: new Date(h.recorded_at) }))
   const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ')
-  const areaPath = n > 1 ? `${linePath} L ${xAt(n - 1).toFixed(1)} ${(H - padB).toFixed(1)} L ${xAt(0).toFixed(1)} ${(H - padB).toFixed(1)} Z` : ''
+  const areaPath = n > 1 ? `${linePath} L ${points[n - 1].x.toFixed(1)} ${(H - padB).toFixed(1)} L ${points[0].x.toFixed(1)} ${(H - padB).toFixed(1)} Z` : ''
   const fmt = d => new Date(d).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
 
   return (
@@ -47,15 +52,23 @@ function FtpChart({ history }) {
       </defs>
       {n > 1 && <path d={areaPath} fill="url(#ftpFill)" stroke="none" />}
       {n > 1 && <path d={linePath} fill="none" stroke="var(--color-accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />}
-      {points.map((p, i) => (
-        <g key={i}>
-          <circle cx={p.x} cy={p.y} r="3" fill="var(--color-accent)" />
-          {(i === 0 || i === n - 1 || n === 1) && (
-            <text x={p.x} y={p.y - 7} textAnchor="middle" fontSize="9" fill="var(--color-text-muted)" fontWeight="600">{p.ftp}</text>
-          )}
-          <text x={Math.min(Math.max(p.x, 14), W - 14)} y={H - 5} textAnchor="middle" fontSize="8" fill="var(--color-text-faint)">{fmt(p.date)}</text>
-        </g>
-      ))}
+      {points.map((p, i) => {
+        const endpoint = i === 0 || i === n - 1
+        const anchor = n === 1 ? 'middle' : i === 0 ? 'start' : 'end'
+        return (
+          <g key={i}>
+            <circle cx={p.x} cy={p.y} r="3" fill="var(--color-accent)">
+              <title>{p.ftp}W · {fmt(p.date)}</title>
+            </circle>
+            {endpoint && (
+              <text x={p.x} y={p.y - 7} textAnchor={anchor} fontSize="9" fill="var(--color-text-muted)" fontWeight="600">{p.ftp}</text>
+            )}
+            {endpoint && (
+              <text x={p.x} y={H - 5} textAnchor={anchor} fontSize="8" fill="var(--color-text-faint)">{fmt(p.date)}</text>
+            )}
+          </g>
+        )
+      })}
     </svg>
   )
 }
