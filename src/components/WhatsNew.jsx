@@ -1,19 +1,26 @@
 import { useState, useEffect } from 'react'
 
-// Bump this when the release notes change — anyone who hasn't seen THIS exact
-// version (including those who saw an earlier one) gets it once on next load.
-const WHATS_NEW_VERSION = '2026-06-29.2'
-const STORAGE_KEY = 'wtc_whatsnew_seen'
-const RELEASE_DATE = '29 June 2026'
+// ───────────────────────────────────────────────────────────────────────────
+// WEEKLY RELEASE NOTE — to publish a new one, edit just this object:
+//   • bump `id` to any new unique string (the date works well) — this is what
+//     re-shows the modal once for every user, replacing the previous note.
+//   • set `date` (header label) and rewrite `changes`.
+// Each user sees only the current note, once. Old notes are not replayed.
+// ───────────────────────────────────────────────────────────────────────────
+const RELEASE = {
+  id: '2026-06-29.3',
+  date: '29 June 2026',
+  changes: [
+    { tag: 'Planner', text: 'Adaptive intensity — weekly quality (sweet-spot / threshold / VO₂) is auto-prescribed from event type, rider profile, phase and current fatigue. The manual easy/hard control is removed.' },
+    { tag: 'Planner', text: 'Form-gated load — intensity is withheld under deep fatigue and reintroduced as form (TSB) recovers.' },
+    { tag: 'Analytics', text: 'Automatic FTP — estimated from synced power and updated on meaningful drift; a 20-minute test is scheduled every ~4 weeks.' },
+    { tag: 'Training', text: 'Strength — optional 1–2 sessions per week, scheduled when no event is near.' },
+    { tag: 'Training', text: 'Multi-sport — running and triathlon plans, with proximity-weighted swim/bike/run distribution and brick sessions.' },
+    { tag: 'App', text: 'Installable — add wattsToCome to the home screen and run it full-screen.' },
+  ],
+}
 
-const CHANGES = [
-  { tag: 'Planner', text: 'Adaptive intensity — weekly quality (sweet-spot / threshold / VO₂) is auto-prescribed from event type, rider profile, phase and current fatigue. The manual easy/hard control is removed.' },
-  { tag: 'Planner', text: 'Form-gated load — intensity is withheld under deep fatigue and reintroduced as form (TSB) recovers.' },
-  { tag: 'Analytics', text: 'Automatic FTP — estimated from synced power and updated on meaningful drift; a 20-minute test is scheduled every ~4 weeks.' },
-  { tag: 'Training', text: 'Strength — optional 1–2 sessions per week, scheduled when no event is near.' },
-  { tag: 'Training', text: 'Multi-sport — running and triathlon plans, with proximity-weighted swim/bike/run distribution and brick sessions.' },
-  { tag: 'App', text: 'Installable — add wattsToCome to the home screen and run it full-screen.' },
-]
+const STORAGE_KEY = 'wtc_whatsnew_seen'
 
 function platform() {
   const ua = navigator.userAgent || ''
@@ -51,11 +58,11 @@ const tagChip = {
 export default function WhatsNew() {
   const [open, setOpen] = useState(false)
   useEffect(() => {
-    try { if (localStorage.getItem(STORAGE_KEY) !== WHATS_NEW_VERSION) setOpen(true) } catch { /* ignore */ }
+    try { if (localStorage.getItem(STORAGE_KEY) !== RELEASE.id) setOpen(true) } catch { /* ignore */ }
   }, [])
 
   function close() {
-    try { localStorage.setItem(STORAGE_KEY, WHATS_NEW_VERSION) } catch { /* ignore */ }
+    try { localStorage.setItem(STORAGE_KEY, RELEASE.id) } catch { /* ignore */ }
     setOpen(false)
   }
 
@@ -71,7 +78,7 @@ export default function WhatsNew() {
           <div>
             <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--color-text-faint)' }}>Release notes</div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700, letterSpacing: '-0.01em' }}>Recent updates</div>
-            <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 2 }}>{RELEASE_DATE}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 2 }}>{RELEASE.date}</div>
           </div>
           <button onClick={close} aria-label="Close" style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
             <i className="ti ti-x" style={{ fontSize: 19 }} aria-hidden="true" />
@@ -80,7 +87,7 @@ export default function WhatsNew() {
 
         <div style={{ padding: '14px 20px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {CHANGES.map((c, i) => (
+            {RELEASE.changes.map((c, i) => (
               <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                 <span style={tagChip}>{c.tag}</span>
                 <span style={{ fontSize: 13, lineHeight: 1.45 }}>{c.text}</span>
