@@ -14,34 +14,32 @@ function SportIcon({ session }) {
   return <i className={`ti ${SPORTS[sport]?.icon || ''}`} style={{ fontSize: 13, opacity: 0.85, marginRight: 4 }} aria-hidden="true" title={SPORTS[sport]?.label} />
 }
 
-// Where the current week stands against its load budget. Makes a bail's
-// consequence visible — and shows the gap closing after an auto-rebalance.
+// Where the current week stands: TSS done so far (solid) plus what's still
+// planned (lighter), against the week's target. Bailed sessions drop out of the
+// committed total, so the bar falling short of the end flags a deficit.
 function WeekLoadGauge({ plannedWeeks, realCurrentWeek, sessionState }) {
   const row = plannedWeeks.find(w => w.week_num === realCurrentWeek)
   if (!row?.sessions?.length || !row.target_tss) return null
-  // Committed load = sessions you'll actually do (everything except bailed ones).
-  const live = row.sessions.filter((s, i) => !sessionState[`w${row.week_num}_${i}`]?.bailed)
-  const committed = weekTss(live)
-  const remaining = row.sessions.filter((s, i) => {
-    if (!s || s.zone === 'rest') return false
-    const st = sessionState[`w${row.week_num}_${i}`] || {}
-    return !st.completed && !st.bailed
-  }).length
+  const st = i => sessionState[`w${row.week_num}_${i}`] || {}
+  const doneTss = weekTss(row.sessions.filter((s, i) => st(i).completed))
+  const remainingTss = weekTss(row.sessions.filter((s, i) => !st(i).completed && !st(i).bailed))
   const target = row.target_tss
-  const pct = Math.min(100, Math.round((committed / target) * 100))
-  const behind = committed < target * 0.9
+  const behind = (doneTss + remainingTss) < target * 0.9 // bailed without recouping
+  const donePct = Math.min(100, Math.round((doneTss / target) * 100))
+  const remPct = Math.min(100 - donePct, Math.round((remainingTss / target) * 100))
 
   return (
     <div style={{ marginBottom: '1.25rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>
         <span>Week load{behind ? ' · behind target' : ''}</span>
         <span>
-          <strong style={{ color: behind ? 'var(--color-amber-text)' : 'var(--color-accent-text)' }}>{committed}</strong> / {target} TSS
-          {remaining ? ` · ${remaining} to go` : ''}
+          <strong style={{ color: 'var(--color-accent-text)' }}>{doneTss}</strong> done / {target} TSS
+          {remainingTss > 0 ? ` · ${remainingTss} to go` : ''}
         </span>
       </div>
-      <div className="progress-track">
-        <div className="progress-fill" style={{ width: `${pct}%`, ...(behind ? { background: 'var(--color-amber-text)' } : {}) }} />
+      <div className="progress-track" style={{ display: 'flex' }}>
+        <div className="progress-fill" style={{ width: `${donePct}%` }} />
+        {remPct > 0 && <div style={{ width: `${remPct}%`, height: '100%', background: behind ? 'var(--color-amber-text)' : 'var(--color-accent)', opacity: 0.3 }} />}
       </div>
     </div>
   )
