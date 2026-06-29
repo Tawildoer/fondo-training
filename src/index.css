@@ -108,7 +108,12 @@ img, svg, video, canvas { max-width: 100%; }
 .app-shell {
   max-width: 900px;
   margin: 0 auto;
-  padding: 2rem 1.5rem;
+  /* Respect the notch / Dynamic Island / home indicator when installed as a
+     full-screen PWA (insets are 0 in a normal browser, so this is a no-op there). */
+  padding-top: max(2rem, calc(env(safe-area-inset-top) + 0.5rem));
+  padding-right: max(1.5rem, env(safe-area-inset-right));
+  padding-bottom: max(2rem, env(safe-area-inset-bottom));
+  padding-left: max(1.5rem, env(safe-area-inset-left));
 }
 /* Give the desktop UI more room so two-column sections breathe. */
 @media (min-width: 1000px) {
@@ -220,7 +225,12 @@ img, svg, video, canvas { max-width: 100%; }
 .hero-btn:hover { background: rgba(255,255,255,0.22); }
 
 @media (max-width: 600px) {
-  .app-shell { padding: 1.25rem 1rem; }
+  .app-shell {
+    padding-top: max(1.25rem, calc(env(safe-area-inset-top) + 0.5rem));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-bottom: max(1.25rem, env(safe-area-inset-bottom));
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
 
   /* Hero: stack vertically so the title gets the full width. Side by side,
      the flex-shrink:0 side column squeezes the title down to a sliver and it
@@ -448,6 +458,7 @@ img, svg, video, canvas { max-width: 100%; }
   width: 100%; aspect-ratio: 1 / 1; border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700;
+  overflow: hidden; white-space: nowrap; /* never let a label spill into neighbours */
 }
 .wk-block.rest { background: var(--color-surface2); }
 .wk-day.today .wk-block { box-shadow: 0 0 0 2px var(--color-electric); }

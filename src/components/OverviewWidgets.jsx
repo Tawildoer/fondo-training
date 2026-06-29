@@ -74,7 +74,13 @@ export function WeekStrip({ plan, sessionState, planStart }) {
                 style={{ opacity: st.bailed ? 0.4 : 1 }}
                 title={s ? `${s.session.name}` : 'Rest'}
               >
-                {isRest ? '' : st.completed ? <i className="ti ti-check" aria-hidden="true" /> : z.toUpperCase()}
+                {isRest ? ''
+                  : st.completed ? <i className="ti ti-check" aria-hidden="true" />
+                  : s.session.test ? 'FTP'
+                  : s.session.sport === 'brick' ? 'BR'
+                  : s.session.sport === 'multi' ? '2'
+                  : z === 'strength' ? <i className="ti ti-barbell" aria-hidden="true" />
+                  : z.toUpperCase()}
               </div>
               <div className="wk-num">{d.getDate()}</div>
             </div>
