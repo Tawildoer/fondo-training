@@ -501,14 +501,14 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
 
   if (page === 'toys') {
     return (
-      <div className="app-shell">
+      <div className="app-shell toy-page-shell">
         <div className="toy-page-header">
           <button className="btn btn-sm" onClick={() => setPage('dashboard')}>
             <i className="ti ti-arrow-left" aria-hidden="true" /> Back
           </button>
           <span className="toy-page-title">Toys · RouteTile</span>
         </div>
-        <Suspense fallback={<div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 14 }}>Loading…</div>}>
+        <Suspense fallback={<div style={{ flex: 1, padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 14 }}>Loading…</div>}>
           <Toys />
         </Suspense>
       </div>

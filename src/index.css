@@ -650,6 +650,7 @@ input[type="checkbox"]:focus-visible {
   align-items: center;
   gap: 14px;
   margin-bottom: 1.25rem;
+  flex-shrink: 0;
 }
 .toy-page-title {
   font-family: var(--font-display);
@@ -669,9 +670,26 @@ input[type="checkbox"]:focus-visible {
      set overflow-x: hidden elsewhere, which per the CSS overflow spec forces
      their overflow-y to a used value of 'auto' too — that makes them scroll
      containers in their own right, so a plain `position: sticky` on the
-     viewer (relative to the page) never actually stuck. Giving the row a
-     fixed height and scrolling the sidebar *inside* it sidesteps that. */
-  .toy-layout { grid-template-columns: 340px 1fr; height: calc(100vh - 130px); align-items: stretch; }
+     viewer (relative to the page) never actually stuck.
+
+     Fix: the whole page (.toy-page-shell) is pinned to exactly one viewport
+     height with its own overflow clipped, so the document itself never has
+     anything to scroll — only the sidebar, which scrolls internally. No
+     scroll ever reaches the map, so a slightly-wrong header height estimate
+     can't leak scroll onto it (that's what broke the first attempt: a fixed
+     `calc(100vh - Npx)` on the layout still let the *page* grow past 100vh
+     and drag the whole block, map included, up and off-screen). Sizing the
+     row via flex:1 instead of a guessed px offset removes that failure mode
+     entirely. */
+  .toy-page-shell {
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .toy-page-shell .toy-layout { flex: 1; min-height: 0; }
+  .toy-layout { grid-template-columns: 340px 1fr; align-items: stretch; }
   .toy-sidebar { overflow-y: auto; min-height: 0; padding-right: 4px; }
 }
 
