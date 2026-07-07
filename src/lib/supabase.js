@@ -38,11 +38,12 @@ export async function updatePassword(newPassword) {
 // ── Users ────────────────────────────────────────────────────
 
 export async function getUserByAuthId(authId) {
+  // maybeSingle: a missing profile (fresh sign-up) is expected, not an error.
   const { data } = await supabase
     .from('users')
     .select('*')
     .eq('auth_id', authId)
-    .single()
+    .maybeSingle()
   return data
 }
 
@@ -88,11 +89,12 @@ export async function addFtpEntry(userId, ftp) {
 // ── Strava ───────────────────────────────────────────────────
 
 export async function getStravaAccount(userId) {
+  // maybeSingle: most users simply haven't connected Strava.
   const { data } = await supabase
     .from('strava_accounts')
     .select('athlete_id, last_synced_at')
     .eq('user_id', userId)
-    .single()
+    .maybeSingle()
   return data
 }
 

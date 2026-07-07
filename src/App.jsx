@@ -7,7 +7,7 @@ import { supabase, getUserByAuthId, signOut } from './lib/supabase'
 import { exchangeStravaCode } from './lib/strava'
 
 export default function App() {
-  const [screen, setScreen] = useState('loading') // loading | login | onboarding | dashboard
+  const [screen, setScreen] = useState('loading') // loading | login | onboarding | dashboard | error
   const [user, setUser] = useState(null)       // full profile row from users table
   const [authUser, setAuthUser] = useState(null) // supabase auth user (needed during onboarding)
 
@@ -33,7 +33,9 @@ export default function App() {
       return () => subscription.unsubscribe()
     }
 
-    // Check for an existing session on mount
+    // Check for an existing session on mount. Any failure here (network drop,
+    // Supabase outage) lands on the error screen with a retry — never an
+    // indefinite "Loading…".
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { setScreen('login'); return }
 
@@ -41,7 +43,7 @@ export default function App() {
       const params = new URLSearchParams(window.location.search)
       const stravaCode = params.get('code')
       if (stravaCode && params.get('scope')) {
-        try { await exchangeStravaCode(stravaCode, params.get('scope')) } catch (e) { /* surfaced on dashboard */ }
+        try { await exchangeStravaCode(stravaCode, params.get('scope')) } catch (e) { console.error('Strava connect failed:', e) }
         window.history.replaceState({}, '', window.location.pathname)
       }
 
@@ -53,6 +55,9 @@ export default function App() {
         setAuthUser(session.user)
         setScreen('onboarding')
       }
+    }).catch(e => {
+      console.error('Boot failed:', e)
+      setScreen('error')
     })
 
     return () => subscription.unsubscribe()
@@ -82,8 +87,22 @@ export default function App() {
 
   if (screen === 'loading') {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
+        <i className="ti ti-bolt boot-bolt" aria-hidden="true" />
         <div style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>Loading…</div>
+      </div>
+    )
+  }
+
+  if (screen === 'error') {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)', padding: '1.5rem', textAlign: 'center' }}>
+        <i className="ti ti-cloud-off" style={{ fontSize: 30, color: 'var(--color-text-faint)' }} aria-hidden="true" />
+        <div style={{ color: 'var(--color-text)', fontSize: 15, fontWeight: 600 }}>Couldn't reach the server</div>
+        <div style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>Check your connection, then try again.</div>
+        <button className="btn btn-primary btn-sm" style={{ marginTop: 6 }} onClick={() => window.location.reload()}>
+          <i className="ti ti-refresh" aria-hidden="true" /> Retry
+        </button>
       </div>
     )
   }

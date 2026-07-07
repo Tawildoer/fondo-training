@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { getScheduledSessions, downloadICS, parseLocalDate } from '../lib/schedule'
+import { getScheduledSessions, downloadICS, parseLocalDate, localDateStr } from '../lib/schedule'
 import EventsManager from './EventsManager'
 
 const ZONE_COLORS = {
@@ -13,7 +13,7 @@ const ZONE_COLORS = {
 function buildSessionsByDate(plan, sessionState, base) {
   const map = {}
   getScheduledSessions(plan, { base }).forEach(({ session, date, weekNum, idx }) => {
-    const key = date.toISOString().slice(0, 10)
+    const key = localDateStr(date)
     if (!map[key]) map[key] = []
     map[key].push({
       ...session,
@@ -33,12 +33,12 @@ export default function CalendarView({ plan, sessionState, planStart, eventName,
 
   const sessionsByDate = buildSessionsByDate(plan, sessionState, planStart)
 
-  // Events keyed the same way as calendar cells (toISOString of local midnight).
+  // Events keyed the same way as calendar cells (local YYYY-MM-DD).
   const eventsByDate = {}
   events.forEach(e => {
     const d = parseLocalDate(e.date)
     if (!d) return
-    const key = d.toISOString().slice(0, 10)
+    const key = localDateStr(d)
     ;(eventsByDate[key] = eventsByDate[key] || []).push(e)
   })
 
@@ -52,7 +52,7 @@ export default function CalendarView({ plan, sessionState, planStart, eventName,
     const dayNum = i - startOffset + 1
     if (dayNum < 1 || dayNum > lastDay.getDate()) return null
     const d = new Date(viewYear, viewMonth, dayNum)
-    const key = d.toISOString().slice(0, 10)
+    const key = localDateStr(d)
     return { date: d, key, dayNum, sessions: sessionsByDate[key] || [] }
   })
 

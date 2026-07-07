@@ -345,6 +345,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                             <div style={{ paddingTop: 2, width: 18, flexShrink: 0 }}>
                               <input type="checkbox" checked={!!state.completed} onClick={stop}
                                 onChange={() => onToggle(week.num, idx, session.zone)}
+                                aria-label={`Mark ${session.day} two-session day done`}
                                 style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-accent)' }} />
                             </div>
                             <div style={{ flex: 1 }}>
@@ -415,6 +416,7 @@ export default function TrainingWeeks({ plan, sessionState, activities = [], pla
                                 checked={!!state.completed}
                                 onClick={stop}
                                 onChange={() => onToggle(week.num, idx, session.zone)}
+                                aria-label={`Mark ${session.name} done`}
                                 style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-accent)' }}
                               />
                             )}

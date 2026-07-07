@@ -120,7 +120,7 @@ export default function Login({ onSignedIn, onSignedUp }) {
                 <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--color-accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
                   <i className="ti ti-lock-question" style={{ fontSize: 24, color: 'var(--color-accent-text)' }} aria-hidden="true" />
                 </div>
-                <h1 style={{ fontSize: '1.4rem', fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 6 }}>
+                <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>
                   Reset your password
                 </h1>
                 <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
@@ -174,10 +174,10 @@ export default function Login({ onSignedIn, onSignedUp }) {
 
         {/* Header */}
         <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
-          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--color-accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
-            <i className="ti ti-bike" style={{ fontSize: 24, color: 'var(--color-accent-text)' }} aria-hidden="true" />
+          <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--grad-hero)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', boxShadow: 'var(--shadow-card)' }}>
+            <i className="ti ti-bolt-filled" style={{ fontSize: 26, color: 'var(--color-electric)' }} aria-hidden="true" />
           </div>
-          <h1 style={{ fontSize: '1.4rem', fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 6 }}>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>
             wattsToCome
           </h1>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>

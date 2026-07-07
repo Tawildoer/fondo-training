@@ -80,8 +80,14 @@ function defaultInputs(plannedWeeks, user) {
 
 export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, sessionState = {}, events = [], loadCtx, onSave, onDelete, onGenerated }) {
   // On the weekend the current (Mon-anchored) week is basically done, so
-  // default to planning next week — the one you're about to ride.
-  const [offset, setOffset] = useState(() => ([0, 6].includes(new Date().getDay()) ? 1 : 0))
+  // default to planning next week — the one you're about to ride. Midweek,
+  // if this week is already locked in but next isn't, also start on next
+  // week (that's the one there's still planning to do).
+  const [offset, setOffset] = useState(() => {
+    if ([0, 6].includes(new Date().getDay())) return 1
+    const has = n => (plannedWeeks || []).some(w => w.week_num === n)
+    return has(weekNum) && !has(weekNum + 1) ? 1 : 0
+  })
   const activeWeekNum = weekNum + offset
   const weekStart = useMemo(() => mondayOfWeek(planStart, activeWeekNum), [planStart, activeWeekNum])
   const existing = plannedWeeks.find(w => w.week_num === activeWeekNum)
@@ -229,7 +235,7 @@ export default function WeeklyPlanner({ user, planStart, weekNum, plannedWeeks, 
           <SessionList sessions={existing.sessions} ftp={user.ftp} />
           <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
             <button className="btn btn-sm" onClick={startReplan}><i className="ti ti-wand" aria-hidden="true" /> Re-plan</button>
-            <button className="btn btn-sm btn-danger" onClick={() => onDelete(activeWeekNum)}><i className="ti ti-trash" aria-hidden="true" /> Clear week</button>
+            <button className="btn btn-sm btn-danger" onClick={() => { if (window.confirm('Clear this planned week? Completed ticks are kept, but the sessions are removed.')) onDelete(activeWeekNum) }}><i className="ti ti-trash" aria-hidden="true" /> Clear week</button>
           </div>
         </div>
       ) : (

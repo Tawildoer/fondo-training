@@ -187,7 +187,7 @@ function Reminders({ plannedWeeks, realCurrentWeek, sessionState, onPlanWeek }) 
       if (!tst.completed && !tst.bailed) {
         items.push({
           id: 'ftp-test', icon: 'ti-gauge',
-          text: 'FTP test on the plan this week — ride it fresh; your FTP updates itself afterwards.',
+          text: 'FTP test on the plan this week — ride it fresh, then set your new FTP in Menu → Settings.',
         })
       }
     }
@@ -244,6 +244,7 @@ function TodayCard({ plan, sessionState, planStart, onToggle, onBail, onDownload
                   type="checkbox"
                   checked={!!state.completed}
                   onChange={() => onToggle(weekNum, idx, session.zone)}
+                  aria-label={`Mark ${session.name} done`}
                   style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--color-accent)', marginTop: 1, flexShrink: 0 }}
                 />
               )}

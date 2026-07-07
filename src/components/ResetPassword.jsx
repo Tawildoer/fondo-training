@@ -52,7 +52,7 @@ export default function ResetPassword({ onSignedIn, onSignedUp }) {
           <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--color-accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
             <i className="ti ti-lock-cog" style={{ fontSize: 24, color: 'var(--color-accent-text)' }} aria-hidden="true" />
           </div>
-          <h1 style={{ fontSize: '1.4rem', fontWeight: 600, letterSpacing: '-0.02em', marginBottom: 6 }}>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 6 }}>
             Choose a new password
           </h1>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>

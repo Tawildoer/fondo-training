@@ -1,16 +1,14 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, lazy, Suspense } from 'react'
 import { generatePlan, computeAdaptation, applyAdaptation } from '../lib/planGenerator'
 import { getPlanStart, getCurrentWeekNum, getUnconfirmedSessions, computeStreak, localDateStr, nextEvent, getScheduledSessions, getSessionDate } from '../lib/schedule'
 import { celebrate } from '../lib/celebrate'
 import { parseLeadingMinutes, computeTrainingLoad } from '../lib/trainingLoad'
-import { loadSessionState, upsertSessionState, loadAdjustments, addAdjustment, deleteAdjustment, updateUser, loadFtpHistory, addFtpEntry, getStravaAccount, loadActivities, loadPlannedWeeks, upsertPlannedWeek, deletePlannedWeek, loadEvents, addEvent, updateEvent, deleteEvent } from '../lib/supabase'
+import { loadSessionState, upsertSessionState, updateUser, loadFtpHistory, addFtpEntry, getStravaAccount, loadActivities, loadPlannedWeeks, upsertPlannedWeek, deletePlannedWeek, loadEvents, addEvent, updateEvent, deleteEvent } from '../lib/supabase'
 import { syncStrava, getStravaAuthUrl, stravaConfigured, getStravaAutoCompletions } from '../lib/strava'
 import TrainingWeeks from './TrainingWeeks'
 import Analytics from './Analytics'
-import Adjustments from './Adjustments'
 import Overview from './Overview'
 import CalendarView from './CalendarView'
-import PlanGuide from './PlanGuide'
 import WeeklyPlanner from './WeeklyPlanner'
 import AccountMenu from './AccountMenu'
 import WhatsNew from './WhatsNew'
@@ -18,6 +16,9 @@ import { buildSession } from '../lib/weeklyPlanner'
 import { rebalanceForBail } from '../lib/rebalance'
 import { buildZwo } from '../lib/zwo'
 import { downloadZwo, supportsFolderSync, linkZwiftFolder, loadHandle, forgetHandle, permission as zwiftPermission, writeSessions } from '../lib/zwiftSync'
+
+// Heavy (three.js + worker) — code-split so it only loads once the Toys tab is opened.
+const Toys = lazy(() => import('../toys/Toys'))
 
 // Reconstruct the app-wide plan shape from persisted weekly-planner weeks.
 function buildPlanFromWeeks(weeks) {
@@ -43,7 +44,6 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
   const [tab, setTab] = useState('overview')
   const [plan, setPlan] = useState([])
   const [sessionState, setSessionState] = useState({}) // { 'w1_0': { completed, rpe, notes, zone } }
-  const [adjustments, setAdjustments] = useState([])
   const [ftpHistory, setFtpHistory] = useState([])
   const [activities, setActivities] = useState([])
   const [stravaAccount, setStravaAccount] = useState(null)
@@ -98,20 +98,18 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
     if (!user?.id) return
     Promise.all([
       loadSessionState(user.id),
-      loadAdjustments(user.id),
       loadFtpHistory(user.id),
       getStravaAccount(user.id),
       loadActivities(user.id),
       loadPlannedWeeks(user.id),
       loadEvents(user.id),
-    ]).then(([sessions, adjs, ftps, strava, acts, weeks, evs]) => {
+    ]).then(([sessions, ftps, strava, acts, weeks, evs]) => {
       const stateMap = {}
       sessions.forEach(s => {
         const key = `w${s.week_num}_${s.session_idx}`
         stateMap[key] = { completed: s.completed, bailed: s.bailed, auto_completed: s.auto_completed, rpe: s.rpe, notes: s.notes, zone: null }
       })
       setSessionState(stateMap)
-      setAdjustments(adjs)
       setFtpHistory(ftps)
       setStravaAccount(strava)
       setActivities(acts)
@@ -141,8 +139,8 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
       plan.forEach(week => {
         week.sessions.forEach((s, i) => {
           const key = `w${week.num}_${i}`
-          if (next[key]) next[key].zone = s.zone
-          else if (s.zone !== 'rest') next[key] = { ...next[key], zone: s.zone }
+          if (next[key]) next[key] = { ...next[key], zone: s.zone }
+          else if (s.zone !== 'rest') next[key] = { zone: s.zone }
         })
       })
       return next
@@ -253,17 +251,6 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
     await upsertSessionState(user.id, weekNum, idx, { notes })
   }, [user.id])
 
-  async function handleAddAdjustment(adj) {
-    await addAdjustment(user.id, adj)
-    const adjs = await loadAdjustments(user.id)
-    setAdjustments(adjs)
-  }
-
-  async function handleDeleteAdjustment(id) {
-    await deleteAdjustment(id)
-    setAdjustments(prev => prev.filter(a => a.id !== id))
-  }
-
   async function handleUpdateFTP(newFTP) {
     const updated = { ...user, ftp: newFTP }
     await updateUser(user.id, { ftp: newFTP })
@@ -317,12 +304,6 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
   async function handleDeleteEvent(id) {
     await deleteEvent(id)
     setEvents(prev => prev.filter(e => e.id !== id))
-  }
-
-  async function handleSetMode(mode) {
-    setTab('overview')
-    await updateUser(user.id, { planning_mode: mode })
-    onUpdateUser({ ...user, planning_mode: mode })
   }
 
   function handleConnectStrava() {
@@ -494,6 +475,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
     { id: 'calendar', label: 'Calendar' },
     { id: 'training', label: 'Training weeks' },
     { id: 'analytics', label: 'Analytics' },
+    { id: 'toys', label: 'Toys' },
   ]
 
   // Sliding tab indicator — measures the active button and animates a single
@@ -569,7 +551,8 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
 
       {loading ? (
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 14 }}>
-          Loading your plan…
+          <i className="ti ti-bolt boot-bolt" aria-hidden="true" />
+          <div style={{ marginTop: 10 }}>Loading your plan…</div>
         </div>
       ) : (
         <>
@@ -578,9 +561,12 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
           {tab === 'plan-week' && weeklyMode && <WeeklyPlanner user={user} planStart={planStart} weekNum={realCurrentWeek} plannedWeeks={plannedWeeks} sessionState={sessionState} events={effectiveEvents} loadCtx={loadCtx} onSave={handleSaveWeek} onDelete={handleDeleteWeek} onGenerated={() => setTab('training')} />}
           {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={upcomingEvent?.name} events={effectiveEvents} onAddEvent={handleAddEvent} onUpdateEvent={handleUpdateEvent} onDeleteEvent={handleDeleteEvent} />}
           {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} realCurrentWeek={realCurrentWeek} user={user} strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onSync: handleSyncStrava }} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} onEditSession={handleEditSession} onDownloadZwo={handleDownloadZwo} />}
-          {tab === 'guide' && <PlanGuide plan={adjustedPlan} user={user} />}
           {tab === 'analytics' && <Analytics user={user} ftpHistory={ftpHistory} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} activities={activities} events={effectiveEvents} loadCtx={loadCtx} plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} />}
-{tab === 'adjustments' && <Adjustments user={user} adjustments={adjustments} plan={adjustedPlan} onAdd={handleAddAdjustment} onDelete={handleDeleteAdjustment} onUpdateFTP={handleUpdateFTP} />}
+          {tab === 'toys' && (
+            <Suspense fallback={<div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 14 }}>Loading…</div>}>
+              <Toys />
+            </Suspense>
+          )}
         </>
       )}
     </div>
