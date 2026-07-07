@@ -241,7 +241,7 @@ function ConnectionsSection({ strava, zwift }) {
   )
 }
 
-export default function AccountMenu({ user, authEmail, strava, zwift, onUpdateProfile, onUpdateFTP, onLogout }) {
+export default function AccountMenu({ user, authEmail, strava, zwift, onUpdateProfile, onUpdateFTP, onLogout, onOpenToys }) {
   const [open, setOpen] = useState(false)
   const [section, setSection] = useState('account')
 
@@ -277,6 +277,13 @@ export default function AccountMenu({ user, authEmail, strava, zwift, onUpdatePr
               {section === 'account' && <AccountSection user={user} authEmail={authEmail} onUpdateProfile={onUpdateProfile} onLogout={onLogout} />}
               {section === 'settings' && <SettingsSection user={user} onUpdateProfile={onUpdateProfile} onUpdateFTP={onUpdateFTP} />}
               {section === 'connections' && <ConnectionsSection strava={strava} zwift={zwift} />}
+            </div>
+            {/* Separate from the training tabs — a standalone tool, tucked
+                away rather than sitting alongside Overview/Analytics. */}
+            <div className="drawer-footer">
+              <button className="btn btn-sm" style={{ width: '100%', justifyContent: 'center' }} onClick={() => { setOpen(false); onOpenToys() }}>
+                <i className="ti ti-flask" aria-hidden="true" /> Toys — RouteTile 3D tiles
+              </button>
             </div>
           </aside>
         </>,

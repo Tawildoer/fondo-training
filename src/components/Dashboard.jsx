@@ -41,6 +41,9 @@ function buildPlanFromWeeks(weeks) {
 }
 
 export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
+  // 'dashboard' | 'toys' — Toys is a separate page (opened from the menu),
+  // not one of the training tabs, so it gets its own render branch below.
+  const [page, setPage] = useState('dashboard')
   const [tab, setTab] = useState('overview')
   const [plan, setPlan] = useState([])
   const [sessionState, setSessionState] = useState({}) // { 'w1_0': { completed, rpe, notes, zone } }
@@ -475,7 +478,6 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
     { id: 'calendar', label: 'Calendar' },
     { id: 'training', label: 'Training weeks' },
     { id: 'analytics', label: 'Analytics' },
-    { id: 'toys', label: 'Toys' },
   ]
 
   // Sliding tab indicator — measures the active button and animates a single
@@ -496,6 +498,22 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
     window.addEventListener('resize', measure)
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure) }
   }, [tab, loading])
+
+  if (page === 'toys') {
+    return (
+      <div className="app-shell">
+        <div className="toy-page-header">
+          <button className="btn btn-sm" onClick={() => setPage('dashboard')}>
+            <i className="ti ti-arrow-left" aria-hidden="true" /> Back
+          </button>
+          <span className="toy-page-title">Toys · RouteTile</span>
+        </div>
+        <Suspense fallback={<div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 14 }}>Loading…</div>}>
+          <Toys />
+        </Suspense>
+      </div>
+    )
+  }
 
   return (
     <div className="app-shell">
@@ -518,7 +536,7 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
               <div className="lbl">days left</div>
             </div>
           )}
-          <AccountMenu user={user} authEmail={authEmail} strava={strava} zwift={zwift} onUpdateProfile={handleUpdateProfile} onUpdateFTP={handleUpdateFTP} onLogout={onLogout} />
+          <AccountMenu user={user} authEmail={authEmail} strava={strava} zwift={zwift} onUpdateProfile={handleUpdateProfile} onUpdateFTP={handleUpdateFTP} onLogout={onLogout} onOpenToys={() => setPage('toys')} />
         </div>
       </div>
 
@@ -562,11 +580,6 @@ export default function Dashboard({ user, onLogout, onUpdateUser, authEmail }) {
           {tab === 'calendar' && <CalendarView plan={adjustedPlan} sessionState={sessionState} planStart={planStart} eventName={upcomingEvent?.name} events={effectiveEvents} onAddEvent={handleAddEvent} onUpdateEvent={handleUpdateEvent} onDeleteEvent={handleDeleteEvent} />}
           {tab === 'training' && <TrainingWeeks plan={adjustedPlan} sessionState={sessionState} activities={activities} planStart={planStart} adaptation={adaptation} currentWeek={currentWeek} realCurrentWeek={realCurrentWeek} user={user} strava={{ configured: stravaConfigured, account: stravaAccount, syncing, syncMsg, onSync: handleSyncStrava }} onToggle={toggleSession} onBail={bailSession} onRPE={setRPE} onNote={setNote} onEditSession={handleEditSession} onDownloadZwo={handleDownloadZwo} />}
           {tab === 'analytics' && <Analytics user={user} ftpHistory={ftpHistory} plan={adjustedPlan} sessionState={sessionState} planStart={planStart} activities={activities} events={effectiveEvents} loadCtx={loadCtx} plannedWeeks={plannedWeeks} realCurrentWeek={realCurrentWeek} />}
-          {tab === 'toys' && (
-            <Suspense fallback={<div style={{ padding: '3rem', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 14 }}>Loading…</div>}>
-              <Toys />
-            </Suspense>
-          )}
         </>
       )}
     </div>
